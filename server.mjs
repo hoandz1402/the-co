@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes, randomInt, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -93,58 +94,120 @@ function propagate(response, packet) {
   response.write("data: " + JSON.stringify(packet) + "\n\n");
 }
 
-export async function createChessServer({
-  databasePath = ":memory:", secureCookies = false, adminUsername, adminPassword, now = Date.now,
-  proxyIPs = false
-} = {}) {
+async function openDatabase(databasePath, databaseURL) {
+  const context = new AsyncLocalStorage();
+  if (databaseURL) {
+    const { Pool } = await import("pg");
+    const url = new URL(databaseURL);
+    if (!["postgres:", "postgresql:"].includes(url.protocol)) throw new Error("DATABASE_URL must be a PostgreSQL URL.");
+    url.searchParams.set("sslmode", "verify-full");
+    const pool = new Pool({
+      connectionString: url.href, max: 4, connectionTimeoutMillis: 15000, idleTimeoutMillis: 5000,
+      enableChannelBinding: true
+    });
+    pool.on("error", (error) => console.error("Idle PostgreSQL client:", error.code || error.message));
+    const execute = (text, args) => (context.getStore() || pool).query(text, args);
+    return {
+      postgres: true,
+      exec: (text) => execute(text),
+      query(sql) {
+        let i = 0;
+        const text = sql.replaceAll("?", () => "$" + ++i);
+        const all = async (...args) => (await execute(text, args)).rows;
+        return {all, get: async (...args) => (await all(...args))[0], run: (...args) => execute(text, args)};
+      },
+      async transaction(action) {
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          // Multiple server instances can overlap briefly during a deploy.
+          await client.query("SELECT pg_advisory_xact_lock(24116208)");
+          const result = await context.run(client, action);
+          await client.query("COMMIT");
+          return result;
+        } catch (error) {
+          await client.query("ROLLBACK").catch(() => {});
+          throw error;
+        } finally { client.release(); }
+      },
+      close: () => pool.end()
+    };
+  }
   if (databasePath !== ":memory:") mkdirSync(dirname(resolve(databasePath)), {recursive: true});
-  const db = new DatabaseSync(databasePath);
-  db.exec([
-    "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
+  const sqlite = new DatabaseSync(databasePath);
+  sqlite.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  let queue = Promise.resolve();
+  const schedule = (action) => {
+    if (context.getStore()) return Promise.resolve().then(action);
+    const next = queue.then(action);
+    queue = next.catch(() => {});
+    return next;
+  };
+  return {
+    postgres: false,
+    exec: (text) => schedule(() => sqlite.exec(text)),
+    query(sql) {
+      const statement = sqlite.prepare(sql);
+      return Object.fromEntries(["get", "all", "run"].map((method) =>
+        [method, (...args) => schedule(() => statement[method](...args))]));
+    },
+    transaction: (action) => schedule(async () => {
+      sqlite.exec("BEGIN IMMEDIATE");
+      try {
+        const result = await context.run(true, action);
+        sqlite.exec("COMMIT");
+        return result;
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+    }),
+    close: () => schedule(() => sqlite.close())
+  };
+}
+
+export async function createChessServer({
+  databasePath = ":memory:", databaseURL, secureCookies = false, adminUsername, adminPassword,
+  now = Date.now, proxyIPs = false
+} = {}) {
+  const db = await openDatabase(databasePath, databaseURL);
+  await db.transaction(() => db.exec([
     "CREATE TABLE IF NOT EXISTS users (",
-    "id INTEGER PRIMARY KEY, username TEXT NOT NULL, name_key TEXT UNIQUE NOT NULL, password TEXT NOT NULL,",
+    (db.postgres ? "id SERIAL PRIMARY KEY" : "id INTEGER PRIMARY KEY") + ", username TEXT NOT NULL, name_key TEXT UNIQUE NOT NULL, password TEXT NOT NULL,",
     "role TEXT NOT NULL DEFAULT 'player' CHECK(role IN ('player','admin')),",
     "elo INTEGER NOT NULL DEFAULT 1200, games INTEGER NOT NULL DEFAULT 0, suspended INTEGER NOT NULL DEFAULT 0);",
-    "CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);",
+    "CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), expires BIGINT NOT NULL);",
     "CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);",
+    "CREATE INDEX IF NOT EXISTS sessions_expiration ON sessions(expires);",
     "CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, host INTEGER NOT NULL REFERENCES users(id),",
-    "guest INTEGER REFERENCES users(id), deadline INTEGER, document TEXT NOT NULL);",
+    "guest INTEGER REFERENCES users(id), deadline BIGINT, document TEXT NOT NULL);",
     "CREATE INDEX IF NOT EXISTS rooms_deadlines ON rooms(deadline) WHERE deadline IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS rooms_members_host ON rooms(host);",
     "CREATE INDEX IF NOT EXISTS rooms_members_guest ON rooms(guest);"
-  ].join("\n"));
+  ].join("\n")));
 
-  const query = (sql) => db.prepare(sql);
+  const {query, transaction} = db;
   const getUser = query("SELECT * FROM users WHERE id = ?");
+  const participants = query("SELECT id, username, elo, games FROM users WHERE id IN (?, ?)");
   const byName = query("SELECT * FROM users WHERE name_key = ?");
-  const addUser = query("INSERT INTO users(username, name_key, password, role) VALUES (?, ?, ?, ?)");
+  const addUser = query("INSERT INTO users(username, name_key, password, role) VALUES (?, ?, ?, ?) RETURNING id");
   const userForSession = query("SELECT users.*, sessions.expires FROM sessions JOIN users ON users.id = sessions.user_id WHERE token = ? AND expires > ? AND suspended = 0");
   const insertSession = query("INSERT INTO sessions VALUES (?, ?, ?)");
   const fetchRoom = query("SELECT document FROM rooms WHERE code = ?");
   const putRoom = query("INSERT INTO rooms(code,host,guest,deadline,document) VALUES (?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET guest=excluded.guest,deadline=excluded.deadline,document=excluded.document");
-  const dueRooms = query("SELECT document FROM rooms WHERE deadline <= ?");
+  const timedRooms = query("SELECT document FROM rooms WHERE deadline IS NOT NULL");
   const roomForUser = query("SELECT document FROM rooms WHERE host = ? OR guest = ?");
   const updateRating = query("UPDATE users SET elo = ?, games = games + 1 WHERE id = ?");
-  const activeStreams = new Map(), rateLimits = new Map();
+  const activeStreams = new Map(), rateLimits = new Map(), deadlines = new Map();
   const dummyHash = await hashPassword(randomBytes(24).toString("hex"));
 
   if (adminUsername || adminPassword) {
     const credentials = readCredentials({username: adminUsername, password: adminPassword});
-    const existing = byName.get(credentials.key);
-    if (existing && existing.role !== "admin") throw new Error("ADMIN_USERNAME belongs to an existing player. Use a new username.");
-    if (!existing) addUser.run(credentials.name, credentials.key, await hashPassword(credentials.password), "admin");
-  }
-
-  function transaction(action) {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      const value = action();
-      db.exec("COMMIT");
-      return value;
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
+    await transaction(async () => {
+      const existing = await byName.get(credentials.key);
+      if (existing && existing.role !== "admin") throw new Error("ADMIN_USERNAME belongs to an existing player. Use a new username.");
+      if (!existing) await addUser.get(credentials.name, credentials.key, await hashPassword(credentials.password), "admin");
+    });
   }
 
   function throttle(key, max, period) {
@@ -155,8 +218,8 @@ export async function createChessServer({
     slot.hits++;
   }
 
-  const getRoom = (code) => {
-    const row = fetchRoom.get(code);
+  const getRoom = async (code) => {
+    const row = await fetchRoom.get(code);
     if (!row) throw roomMissing();
     return JSON.parse(row.document);
   };
@@ -166,10 +229,8 @@ export async function createChessServer({
     room.running && room.minutes && index === (room.turn === core.WHITE ? 0 : 1)
       ? Math.max(0, base - (now() - room.since)) : base);
 
-  function saveRoom(room) {
-    const deadline = room.running && room.minutes ? room.since + room.times[room.turn === core.WHITE ? 0 : 1] : null;
-    putRoom.run(room.code, room.host, room.guest, deadline, JSON.stringify(room));
-  }
+  const deadlineFor = (room) => room.running && room.minutes ? room.since + room.times[room.turn === core.WHITE ? 0 : 1] : null;
+  const saveRoom = (room) => putRoom.run(room.code, room.host, room.guest, deadlineFor(room), JSON.stringify(room));
 
   function newRound(room) {
     Object.assign(room, {
@@ -200,23 +261,30 @@ export async function createChessServer({
     });
   }
 
-  function awardElo(room) {
+  async function awardElo(room) {
     if (room.kind !== "rated" || !room.result || room.result.reason === "cancelled" || room.awards) return;
-    const white = getUser.get(room.hostColor === core.WHITE ? room.host : room.guest);
-    const black = getUser.get(room.hostColor === core.BLACK ? room.host : room.guest);
+    const players = await roomPlayers(room);
+    const white = room.hostColor === core.WHITE ? players.host : players.guest;
+    const black = room.hostColor === core.BLACK ? players.host : players.guest;
     if (!white || !black) return;
     const expected = 1 / (1 + 10 ** ((black.elo - white.elo) / 400));
     const score = room.result.winner === core.WHITE ? 1 : room.result.winner === core.BLACK ? 0 : .5;
     const delta = Math.round(32 * (score - expected));
     room.awards = {white: delta, black: -delta};
-    updateRating.run(white.elo + delta, white.id);
-    updateRating.run(black.elo - delta, black.id);
+    await updateRating.run(white.elo + delta, white.id);
+    await updateRating.run(black.elo - delta, black.id);
   }
 
-  function snapshot(room, user) {
+  async function roomPlayers(room) {
+    if (!room.guest) return null;
+    const rows = await participants.all(room.host, room.guest);
+    return {host: rows.find((user) => user.id === room.host), guest: rows.find((user) => user.id === room.guest)};
+  }
+
+  function snapshot(room, user, players) {
     if (room.closed) return {type: "ROOM_CLOSED", revision: room.revision};
     if (!room.guest) return {type: "ROOM_WAITING", revision: room.revision, kind: room.kind};
-    const host = getUser.get(room.host), guest = getUser.get(room.guest);
+    const {host, guest} = players;
     const [whiteTime, blackTime] = currentClocks(room);
     return {
       type: "STATE", version: 1, game: room.game, revision: room.revision, hostColor: room.hostColor,
@@ -229,35 +297,34 @@ export async function createChessServer({
     };
   }
 
-  function broadcast(room, event = null, exclude = null) {
+  function broadcast(room, players, event = null, exclude = null) {
     for (const [response, listener] of activeStreams.get(room.code) || []) {
-      if (listener.user.id !== exclude) propagate(response, event || snapshot(room, listener.user));
+      if (listener.user.id !== exclude) propagate(response, event || snapshot(room, listener.user, players));
     }
   }
 
-  function createRoom(user, data) {
+  async function createRoom(user, data) {
     const {kind, minutes, color} = data;
     if (!["rated", "assisted"].includes(kind) || !TIMER_OPTIONS.has(minutes) || ![1, -1, 0].includes(color)) {
       throw bad("Thiết lập phòng không hợp lệ.");
     }
     if (kind === "assisted" && user.role !== "admin") throw denied();
     const code = "ELO-" + Array.from({length: 5}, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
-    if (fetchRoom.get(code)) return createRoom(user, data);
+    if (await fetchRoom.get(code)) return createRoom(user, data);
     const room = {
       code, kind, minutes, host: user.id, guest: null, hostColor: color || (randomInt(2) ? 1 : -1),
       game: 1, revision: 0, nextOffer: 0, left: null, closed: false
     };
     newRound(room);
-    saveRoom(room);
+    await saveRoom(room);
     return room;
   }
 
-  function joinRoom(room, user, data) {
+  async function joinRoom(room, user, data) {
     if (room.closed) throw roomMissing();
     if (member(room, user)) {
       if (room.left === user.id) throw new HttpError(409, "Bạn đã rời phòng này.");
-      settleTimeout(room);
-      return;
+      return settleTimeout(room);
     }
     if (room.guest) throw new HttpError(409, "Phòng đã có hai người chơi.");
     if (room.kind === "assisted" && data.acceptAssistance !== true) {
@@ -265,20 +332,44 @@ export async function createChessServer({
     }
     room.guest = user.id;
     newRound(room);
-    saveRoom(room);
-    broadcast(room);
+    await saveRoom(room);
+    return true;
   }
 
-  function settleTimeout(room) {
+  async function settleTimeout(room) {
     if (!room.running || !room.minutes || !currentClocks(room).includes(0)) return false;
     const match = rebuild(room);
     if (!match.timeout()) return false;
     storeMatch(room, match);
     room.offer = null;
     room.revision++;
-    transaction(() => { awardElo(room); saveRoom(room); });
-    broadcast(room);
+    await awardElo(room);
+    await saveRoom(room);
     return true;
+  }
+
+  function armDeadline(room, delay = 0) {
+    const active = deadlines.get(room.code);
+    if (active && active.revision > room.revision) return;
+    clearTimeout(active?.timer);
+    deadlines.delete(room.code);
+    const deadline = deadlineFor(room);
+    if (deadline === null) return;
+    const timer = setTimeout(async () => {
+      try {
+        const {latest, changed} = await transaction(async () => {
+          const latest = await getRoom(room.code);
+          return {latest, changed: await settleTimeout(latest)};
+        });
+        if (deadlines.get(room.code)?.timer === timer || changed) armDeadline(latest);
+        if (changed && activeStreams.has(room.code)) broadcast(latest, await roomPlayers(latest));
+      } catch (error) {
+        console.error("Room timeout:", error.code || error.message);
+        const active = deadlines.get(room.code);
+        if (active?.timer === timer) armDeadline(room, Math.min(30000, Math.max(2000, delay * 2)));
+      }
+    }, Math.max(delay, deadline - now(), 0)).unref();
+    deadlines.set(room.code, {revision: room.revision, timer});
   }
 
   function propose(room, user, kind) {
@@ -309,10 +400,10 @@ export async function createChessServer({
     }
   }
 
-  function applyAction(room, user, packet) {
+  async function applyAction(room, user, packet) {
     if (!member(room, user) || room.closed || room.left === user.id) throw roomMissing();
-    settleTimeout(room);
-    if (packet.type === "SYNC_REQUEST") return;
+    const timedOut = await settleTimeout(room);
+    if (packet.type === "SYNC_REQUEST" || (timedOut && packet.type !== "LEAVE")) return {changed: timedOut};
     if (packet.type === "LEAVE") {
       room.left = user.id;
       room.offer = null;
@@ -327,8 +418,7 @@ export async function createChessServer({
       if (packet.type === "CHAT") {
         throttle("chat:" + user.id, 8, 5000);
         if (typeof packet.text !== "string" || !packet.text.trim() || packet.text.length > 240) throw bad("Tin nhắn không hợp lệ.");
-        broadcast(room, {type: "CHAT", text: packet.text.trim()}, user.id);
-        return;
+        return {chat: {type: "CHAT", text: packet.text.trim()}};
       }
       if (packet.game !== room.game || (["MOVE","REQUEST","CLAIM"].includes(packet.type) && packet.revision !== room.revision)) {
         throw new HttpError(409, "Bàn cờ đã thay đổi. Hãy thử lại.", "STALE");
@@ -356,11 +446,12 @@ export async function createChessServer({
       }
     }
     room.revision++;
-    transaction(() => { awardElo(room); saveRoom(room); });
-    broadcast(room);
+    await awardElo(room);
+    await saveRoom(room);
+    return {changed: true};
   }
 
-  function openStream(response, room, session) {
+  function openStream(response, room, session, players) {
     if (!member(room, session.user) || room.left === session.user.id || room.closed) throw roomMissing();
     const listeners = activeStreams.get(room.code) || new Map();
     if ([...listeners.values()].filter((other) => other.user.id === session.user.id).length >= 5) {
@@ -373,7 +464,7 @@ export async function createChessServer({
       "X-Accel-Buffering": "no", "Connection": "keep-alive"
     });
     response.write("retry: 1500\n\n");
-    propagate(response, snapshot(room, session.user));
+    propagate(response, snapshot(room, session.user, players));
     response.on("close", () => {
       listeners.delete(response);
       if (!listeners.size) activeStreams.delete(room.code);
@@ -390,15 +481,16 @@ export async function createChessServer({
     }
   }
 
-  function moderate(id, suspended) {
-    const target = getUser.get(id);
-    if (!target || target.role !== "player") throw denied();
+  async function moderate(id, suspended, session) {
     const changed = [];
-    transaction(() => {
-      query("UPDATE users SET suspended = ? WHERE id = ?").run(Number(suspended), id);
+    await transaction(async () => {
+      await requireSession(session);
+      const target = await getUser.get(id);
+      if (!target || target.role !== "player") throw denied();
+      await query("UPDATE users SET suspended = ? WHERE id = ?").run(Number(suspended), id);
       if (!suspended) return;
-      query("DELETE FROM sessions WHERE user_id = ?").run(id);
-      for (const row of roomForUser.all(id, id)) {
+      await query("DELETE FROM sessions WHERE user_id = ?").run(id);
+      for (const row of await roomForUser.all(id, id)) {
         const room = JSON.parse(row.document);
         if (room.closed || room.left) continue;
         if (!room.guest) room.closed = true;
@@ -410,22 +502,31 @@ export async function createChessServer({
         room.offer = null;
         room.left = id;
         room.revision++;
-        saveRoom(room);
+        await saveRoom(room);
         changed.push(room);
       }
     });
     if (suspended) closeStreams((session) => session.user.id === id);
-    for (const room of changed) broadcast(room);
-    return {...publicUser(getUser.get(id)), id, suspended};
+    for (const room of changed) {
+      armDeadline(room);
+      if (activeStreams.has(room.code)) broadcast(room, await roomPlayers(room));
+    }
+    return {...publicUser(await getUser.get(id)), id, suspended};
   }
 
-  function sessionFor(request) {
+  async function sessionFor(request) {
     const cookie = (request.headers.cookie || "").split(";").map((part) => part.trim()).find((part) => part.startsWith(COOKIE + "="));
     const token = cookie?.slice(COOKIE.length + 1);
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
     const hash = tokenDigest(token);
-    const user = userForSession.get(hash, now());
+    const user = await userForSession.get(hash, now());
     return user ? {user, token: hash} : null;
+  }
+
+  async function requireSession(session) {
+    const user = await userForSession.get(session.token, now());
+    if (!user) throw new HttpError(401, "Phiên đăng nhập đã kết thúc.");
+    return user;
   }
 
   function setCookie(response, token, maxAge) {
@@ -452,13 +553,13 @@ export async function createChessServer({
         return;
       }
       if (method === "GET" && path === "/healthz") { sendJSON(response, 200, {ok: true}); return; }
-      const session = sessionFor(request), user = session?.user;
+      const session = await sessionFor(request), user = session?.user;
       if (method === "GET" && path === "/api/account") {
         sendJSON(response, 200, {available: true, user: user ? publicUser(user) : null});
         return;
       }
       if (method === "GET" && path === "/api/leaderboard") {
-        const rows = query("SELECT username, elo, games FROM users WHERE suspended = 0 AND games > 0 ORDER BY elo DESC, games DESC, name_key ASC LIMIT 50").all();
+        const rows = await query("SELECT username, elo, games FROM users WHERE suspended = 0 AND games > 0 ORDER BY elo DESC, games DESC, name_key ASC LIMIT 50").all();
         sendJSON(response, 200, {players: rows});
         return;
       }
@@ -466,23 +567,27 @@ export async function createChessServer({
         throttle("auth:" + clientIP(request), 16, 60000);
         const credentials = readCredentials(await readJSON(request));
         throttle("name:" + credentials.key, 10, 60000);
-        let account = byName.get(credentials.key);
-        if (path === "/api/register") {
-          if (account) throw new HttpError(409, "Tên tài khoản đã được dùng.");
-          const password = await hashPassword(credentials.password);
-          if (byName.get(credentials.key)) throw new HttpError(409, "Tên tài khoản đã được dùng.");
-          account = getUser.get(addUser.run(credentials.name, credentials.key, password, "player").lastInsertRowid);
-        } else {
-          const valid = await passwordMatches(credentials.password, account?.password || dummyHash);
-          if (account) account = getUser.get(account.id);
-          if (!account || !valid || account.suspended) throw new HttpError(401, "Thông tin đăng nhập không hợp lệ hoặc tài khoản đã bị khóa.");
-        }
-        if (session) {
-          query("DELETE FROM sessions WHERE token = ?").run(session.token);
-          closeStreams((item) => item.token === session.token);
-        }
+        const register = path === "/api/register";
+        const existing = await byName.get(credentials.key);
+        const occupied = () => new HttpError(409, "Tên tài khoản đã được dùng.");
+        const invalidLogin = () => new HttpError(401, "Thông tin đăng nhập không hợp lệ hoặc tài khoản đã bị khóa.");
+        if (register && existing) throw occupied();
+        const password = register ? await hashPassword(credentials.password) : null;
+        if (!register && !(await passwordMatches(credentials.password, existing?.password || dummyHash))) throw invalidLogin();
         const token = randomBytes(32).toString("hex");
-        insertSession.run(tokenDigest(token), account.id, now() + SESSION_AGE * 1000);
+        const account = await transaction(async () => {
+          let current = await byName.get(credentials.key);
+          if (register) {
+            if (current) throw occupied();
+            const {id} = await addUser.get(credentials.name, credentials.key, password, "player");
+            current = await getUser.get(id);
+          } else if (!current || !existing || current.password !== existing.password || current.suspended) throw invalidLogin();
+          if (session) await query("DELETE FROM sessions WHERE token = ?").run(session.token);
+          await query("DELETE FROM sessions WHERE expires <= ?").run(now());
+          await insertSession.run(tokenDigest(token), current.id, now() + SESSION_AGE * 1000);
+          return current;
+        });
+        if (session) closeStreams((item) => item.token === session.token);
         setCookie(response, token, SESSION_AGE);
         sendJSON(response, 200, {user: publicUser(account)});
         return;
@@ -490,7 +595,7 @@ export async function createChessServer({
       if (method === "POST" && path === "/api/logout") {
         await readJSON(request);
         if (session) {
-          query("DELETE FROM sessions WHERE token = ?").run(session.token);
+          await transaction(() => query("DELETE FROM sessions WHERE token = ?").run(session.token));
           closeStreams((item) => item.token === session.token);
         }
         setCookie(response, "", 0);
@@ -503,75 +608,86 @@ export async function createChessServer({
       if (!user) throw new HttpError(401, "Hãy đăng nhập để tiếp tục.");
       if (path === "/api/admin/users" && method === "GET" && user.role === "admin") {
         const search = (url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 24);
-        const players = query("SELECT id, username, elo, games, role, suspended FROM users WHERE instr(name_key, ?) > 0 OR ? = '' ORDER BY id DESC LIMIT 100").all(search, search);
+        const pattern = "%" + search.replace(/[!%_]/g, "!$&") + "%";
+        const players = await query("SELECT id, username, elo, games, role, suspended FROM users WHERE name_key LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT 100").all(pattern);
         sendJSON(response, 200, {players});
       } else if (path === "/api/admin/suspension" && method === "POST" && user.role === "admin") {
         const data = await readJSON(request);
-        if (!userForSession.get(session.token, now())) throw new HttpError(401, "Phiên đăng nhập đã kết thúc.");
         if (!Number.isSafeInteger(data.id) || typeof data.suspended !== "boolean") throw bad("Tài khoản không hợp lệ.");
-        sendJSON(response, 200, {user: moderate(data.id, data.suspended)});
+        sendJSON(response, 200, {user: await moderate(data.id, data.suspended, session)});
       } else if (isAdmin) throw denied();
       else if (path === "/api/rooms" && method === "POST") {
         throttle("create:" + user.id, 12, 60000);
         const data = await readJSON(request);
-        if (!userForSession.get(session.token, now())) throw new HttpError(401, "Phiên đăng nhập đã kết thúc.");
-        const room = createRoom(user, data);
+        const room = await transaction(async () => createRoom(await requireSession(session), data));
         sendJSON(response, 201, {code: room.code, state: snapshot(room, user)});
       } else if (roomRoute && ROOM.test(roomRoute[1])) {
         const [, code, action] = roomRoute;
         if (method === "GET" && action === "events") {
-          const room = getRoom(code);
-          if (!member(room, user)) throw roomMissing();
-          settleTimeout(room);
-          openStream(response, room, session);
+          const {room, changed, players} = await transaction(async () => {
+            await requireSession(session);
+            const room = await getRoom(code);
+            if (!member(room, user) || room.left === user.id || room.closed) throw roomMissing();
+            const changed = await settleTimeout(room);
+            return {room, changed, players: await roomPlayers(room)};
+          });
+          if (changed) { armDeadline(room); broadcast(room, players); }
+          openStream(response, room, session, players);
         } else if (method === "POST" && action !== "events") {
           throttle("room:" + user.id, 90, 30000);
           const data = await readJSON(request);
-          if (!userForSession.get(session.token, now())) throw new HttpError(401, "Phiên đăng nhập đã kết thúc.");
-          const room = getRoom(code);
-          if (action === "join") joinRoom(room, user, data);
-          else {
-            if (member(room, user)) { actionRoom = room; actionUser = user; }
-            applyAction(room, user, data);
-          }
-          sendJSON(response, 200, {code, state: snapshot(room, user)});
+          const {room, changed, chat, players} = await transaction(async () => {
+            const player = await requireSession(session);
+            const room = await getRoom(code);
+            if (action === "join") return {room, changed: await joinRoom(room, player, data), players: await roomPlayers(room)};
+            if (member(room, player)) { actionRoom = room; actionUser = player; }
+            const outcome = await applyAction(room, player, data);
+            return {room, ...outcome, players: await roomPlayers(room)};
+          });
+          if (changed) { armDeadline(room); broadcast(room, players); }
+          if (chat) broadcast(room, players, chat, user.id);
+          sendJSON(response, 200, {code, state: snapshot(room, user, players)});
         } else throw roomMissing();
       } else throw roomMissing();
     } catch (error) {
       if (response.headersSent) { response.end(); return; }
       if (error instanceof HttpError) {
-        const state = actionRoom && error.code === "STALE" ? snapshot(actionRoom, actionUser) : undefined;
+        let state;
+        if (actionRoom && error.code === "STALE") {
+          try { state = snapshot(actionRoom, actionUser, await roomPlayers(actionRoom)); } catch {}
+        }
         sendJSON(response, error.status, {message: error.message, code: error.code, state});
       } else {
-        console.error(error);
+        console.error("HTTP request failed:", error.code || error.message);
         sendJSON(response, 500, {message: "Máy chủ gặp lỗi. Hãy thử lại."});
       }
     }
   });
 
-  const timers = setInterval(() => {
-    try { for (const row of dueRooms.all(now())) settleTimeout(JSON.parse(row.document)); }
-    catch (error) { console.error(error); }
-  }, 500).unref();
+  for (const row of await timedRooms.all()) armDeadline(JSON.parse(row.document));
   const heartbeat = setInterval(() => {
-    closeStreams((session) => !userForSession.get(session.token, now()));
+    closeStreams((session) => Number(session.user.expires) <= now());
     for (const listeners of activeStreams.values()) {
       for (const response of listeners.keys()) if (!response.writableEnded && !response.destroyed) response.write(": ping\n\n");
     }
-    query("DELETE FROM sessions WHERE expires <= ?").run(now());
     for (const [key, value] of rateLimits) if (value.until <= now()) rateLimits.delete(key);
   }, 15000).unref();
-  server.on("close", () => { clearInterval(timers); clearInterval(heartbeat); db.close(); });
+  server.on("close", () => {
+    for (const {timer} of deadlines.values()) clearTimeout(timer);
+    deadlines.clear();
+    clearInterval(heartbeat);
+    db.close().catch((error) => console.error("Database shutdown:", error.code || error.message));
+  });
   return {server, disconnectStreams: () => {
     for (const listeners of activeStreams.values()) for (const response of listeners.keys()) response.end();
   }};
 }
 
 if (typeof process !== "undefined" && process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const {ADMIN_USERNAME, ADMIN_PASSWORD, DB_PATH, PORT, RENDER} = process.env;
-  if (RENDER && !DB_PATH) throw new Error("Set DB_PATH to a SQLite file on your Render persistent disk.");
+  const {ADMIN_USERNAME, ADMIN_PASSWORD, DATABASE_URL, DB_PATH, PORT, RENDER} = process.env;
+  if (RENDER && !DATABASE_URL && !DB_PATH) throw new Error("Set DATABASE_URL to your PostgreSQL connection string.");
   const {server, disconnectStreams} = await createChessServer({
-    databasePath: DB_PATH || "./data/the-co.sqlite", secureCookies: !!RENDER,
+    databasePath: DB_PATH || "./data/the-co.sqlite", databaseURL: DATABASE_URL, secureCookies: !!RENDER,
     adminUsername: ADMIN_USERNAME, adminPassword: ADMIN_PASSWORD, proxyIPs: !!RENDER
   });
   server.listen(Number(PORT || 3000), RENDER ? "0.0.0.0" : "127.0.0.1", () => {
