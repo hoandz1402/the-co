@@ -1,0 +1,2329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101716">
+<title>Thế Cờ — Cờ vua</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #101716; --panel: #192321; --panel-deep: #131d1b; --line: #2c3b36;
+    --text: #eef5ef; --muted: #a4b5ac; --quiet: #849b91; --mint: #acf3ce; --mint-dark: #18382c;
+    --light: #dce9da; --dark: #729689; --red: #f48083;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; min-width: 280px; min-height: 100vh; background: radial-gradient(ellipse at 48% 17%, #1d2c26 0%, var(--bg) 57%); color: var(--text); }
+  button, select, input, textarea { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; opacity: .45; }
+  button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+  button, input, select, textarea { border-radius: 9px; }
+  .icon { width: 19px; height: 19px; flex: 0 0 auto; vertical-align: middle; }
+  .topbar { border-bottom: 1px solid #283731; background: #111917; }
+  .top-inner { max-width: 1176px; min-height: 76px; margin: auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 11px; white-space: nowrap; font-size: 1.19rem; font-weight: 750; letter-spacing: -.025em; }
+  .brand-mark { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 11px; background: var(--mint); }
+  .brand-mark .piece { width: 31px; height: 31px; --piece-fill: #1b3d31; --piece-stroke: #1b3d31; --piece-detail: #acf3ce; filter: none; }
+  .nav { display: flex; gap: 4px; padding: 4px; background: #18231f; border: 1px solid #283833; border-radius: 12px; }
+  .nav button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; border: 1px solid transparent; white-space: nowrap; color: var(--muted); background: transparent; font-size: .875rem; font-weight: 650; }
+  .nav button[aria-pressed="true"] { color: var(--mint); background: #284137; border-color: #3b5b4c; }
+  .nav button:hover:not([aria-pressed="true"]) { background: #22332c; color: var(--text); }
+  .surface, .btn, .sound { display: inline-flex; justify-content: center; align-items: center; gap: 8px; color: var(--text); background: #202d29; border: 1px solid #34463e; min-height: 42px; padding: 8px 12px; font-weight: 650; font-size: .875rem; }
+  .surface:hover:not(:disabled), .btn:hover:not(:disabled), .sound:hover { background: #2a3d34; }
+  .sound { color: var(--muted); min-width: 42px; padding: 9px; }
+  .sound[aria-pressed="false"] { color: var(--quiet); }
+  .btn.primary { color: #163429; border-color: var(--mint); background: var(--mint); }
+  .btn.primary:hover:not(:disabled) { background: #c8fbe0; }
+  .btn.danger { color: #ffc1c2; }
+  .shell { width: min(1088px, calc(100% - 48px)); margin: 30px auto 34px; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 22px; }
+  h1, h2, p { margin: 0; }
+  h1 { font-size: clamp(1.85rem, 4vw, 2.6rem); font-weight: 760; letter-spacing: -.055em; line-height: 1.12; }
+  .eyeline { color: var(--muted); margin-top: 8px; font-size: .935rem; }
+  .badge { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; padding: 7px 11px; color: var(--muted); background: #182621; border: 1px solid #31473c; border-radius: 50px; font-size: .82rem; }
+  .dot { width: 8px; height: 8px; border-radius: 100%; background: #84d1ab; }
+  .badge.wait .dot { background: #f0c47c; }
+  .badge.off .dot { background: #f48083; }
+  .layout { display: grid; grid-template-columns: minmax(0, 654px) minmax(290px, 1fr); align-items: start; gap: 24px; }
+  .arena { display: grid; gap: 10px; }
+  .player { display: flex; min-width: 0; align-items: center; gap: 11px; min-height: 55px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 11px; background: #192320; }
+  .player.active { border-color: #4c7463; background: #1b2a24; }
+  .avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; flex: 0 0 auto; background: #2b3e35; color: #c0e7d3; }
+  .player-info { min-width: 0; flex: 1; }
+  .player-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .925rem; font-weight: 700; }
+  .player-detail { display: flex; align-items: center; gap: 7px; min-height: 17px; color: var(--muted); font-size: .765rem; }
+  .takes { display: flex; align-items: center; padding-left: 1px; max-width: 96px; overflow: hidden; }
+  .takes .piece { width: 15px; height: 15px; margin-left: -2px; }
+  .clock { flex: 0 0 auto; text-align: center; min-width: 76px; padding: 5px 9px; border-radius: 7px; background: #111a17; color: #cfddd5; font-variant-numeric: tabular-nums; font-family: ui-monospace, Consolas, monospace; font-size: 1.12rem; font-weight: 700; }
+  .player.active .clock { background: var(--mint); color: #193a2b; }
+  .player .clock.low { background: #5c292c; color: #ffdce0; }
+  .boardline { min-width: 0; display: flex; gap: 9px; }
+  .eval { width: 24px; flex: 0 0 24px; position: relative; overflow: hidden; border-radius: 7px; background: #303d38; border: 1px solid #3e4e46; }
+  .eval-fill { position: absolute; bottom: 0; width: 100%; background: #e3eee4; transition: height .25s ease; }
+  .eval-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg); color: #f4f6f2; background: #27362e; white-space: nowrap; padding: 2px 5px; border-radius: 3px; font: 700 .66rem ui-monospace, Consolas, monospace; }
+  .board { min-width: 0; flex: 1; align-self: flex-start; display: grid; grid-template: repeat(8, minmax(0, 1fr)) / repeat(8, minmax(0, 1fr)); aspect-ratio: 1; border-radius: 9px; overflow: hidden; box-shadow: 0 12px 28px #080e0c70; touch-action: none; user-select: none; }
+  .square { display: grid; place-items: center; position: relative; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: var(--light); color: #456c5f; }
+  .square.dark { background: var(--dark); color: #f0f7e9; }
+  .square.last { background: #cfdb8b; }
+  .square.dark.last { background: #9fb76c; }
+  .square.selected { background: #a9d596; box-shadow: inset 0 0 0 3px #3a775c; }
+  .square.hint { box-shadow: inset 0 0 0 4px #4195a6; }
+  .square.check { background-image: radial-gradient(circle, #f15d67 5%, #c7444e 45%, transparent 73%); }
+  .square.target::after { position: absolute; inset: 36%; border-radius: 50%; background: #1a453c55; content: ""; pointer-events: none; }
+  .square.capture::after { position: absolute; inset: 4%; border-radius: 50%; border: clamp(3px, .45vw, 7px) solid #1a453c62; content: ""; pointer-events: none; }
+  .square:focus-visible { outline-offset: -3px; outline-color: #173d34; z-index: 1; }
+  .square.playable { cursor: grab; }
+  .square.dragging .piece { visibility: hidden; }
+  .coord { position: absolute; font-size: clamp(.58rem, 1.18vw, .77rem); font-weight: 800; line-height: 1; pointer-events: none; }
+  .rank { top: 4px; left: 4px; } .file { bottom: 4px; right: 4px; }
+  .piece { display: block; width: 83%; height: 83%; overflow: visible; pointer-events: none; filter: drop-shadow(0 2px 1px #14251d52); }
+  .piece.white { --piece-fill: #fbf7e9; --piece-stroke: #263b34; --piece-detail: #536e62; }
+  .piece.black { --piece-fill: #243832; --piece-stroke: #14241f; --piece-detail: #a3bdb0; }
+  .ghost { position: fixed; z-index: 6; pointer-events: none; transform: translate(-50%, -54%); display: grid; place-items: center; }
+  .sidebar { min-width: 0; display: grid; gap: 13px; }
+  .card { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+  .card-inner { padding: 15px; display: grid; gap: 13px; }
+  .card-title, .panel-tab { display: inline-flex; align-items: center; gap: 8px; }
+  .card-title { font-size: 1rem; font-weight: 740; }
+  .card-title .icon, .panel-tab .icon { color: #9dcbb4; }
+  .status-card { padding: 13px 15px; display: flex; align-items: center; gap: 10px; border-color: #365244; background: #1c2e26; min-height: 53px; }
+  .status-card .icon { color: var(--mint); }
+  .status-card strong { font-size: .94rem; font-weight: 720; }
+  .field-grid, .tools, .button-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  label { display: grid; gap: 6px; color: var(--muted); font-size: .84rem; font-weight: 640; }
+  input, textarea, select { min-width: 0; width: 100%; color: var(--text); background: #131d1a; border: 1px solid #35463e; padding: 9px 10px; min-height: 41px; font-size: .9rem; }
+  select { appearance: none; padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='%23a4b5ac' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 5 4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-size: 14px; background-position: right 9px center; }
+  .tools .surface { justify-content: flex-start; text-align: left; min-height: 38px; font-size: .82rem; padding: 7px 9px; }
+  .tools .icon { width: 16px; height: 16px; color: #a1beaf; }
+  .divider { height: 1px; background: var(--line); }
+  .panel-head { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+  .panel-tab { align-self: stretch; border: 0; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: .88rem; font-weight: 700; padding: 0 5px; }
+  .panel-tab.active { color: var(--text); border-color: #8fdbb5; }
+  .ply-count { margin-left: auto; color: var(--muted); font-size: .78rem; white-space: nowrap; }
+  .movelist, .chatlog { min-height: 124px; max-height: 240px; overflow: auto; scrollbar-color: #466454 var(--panel); }
+  .move-row { display: grid; grid-template-columns: 38px 1fr 1fr; min-height: 29px; align-items: center; font: 650 .91rem ui-monospace, Consolas, monospace; padding: 0 15px; }
+  .move-row:nth-child(odd) { background: #202d28; }
+  .move-no { color: var(--muted); font-size: .8rem; }
+  .last-san { color: var(--mint); }
+  .empty { min-height: 122px; padding: 18px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); text-align: center; font-size: .85rem; }
+  .empty .icon { color: #85a797; width: 24px; height: 24px; }
+  .room-code { display: grid; gap: 8px; }
+  .code { color: var(--mint); letter-spacing: .1em; font: 700 1.23rem ui-monospace, Consolas, monospace; }
+  .join-row, .chat-form { display: flex; gap: 7px; }
+  .join-row .btn, .chat-form .btn { flex: 0 0 auto; }
+  .chat-form, .reactions { padding: 8px 12px; }
+  .reactions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 0; }
+  .reactions button { min-width: 37px; min-height: 33px; padding: 3px 8px; }
+  .chatlog p { padding: 5px 13px; font-size: .88rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .chatlog p:first-child { padding-top: 11px; }
+  .chatlog strong { color: var(--mint); }
+  dialog { width: min(425px, calc(100% - 28px)); border: 1px solid #496558; color: var(--text); background: #1b2923; border-radius: 14px; padding: 20px; box-shadow: 0 16px 50px #070c09ac; }
+  dialog::backdrop { background: #09110de0; }
+  dialog h2 { font-size: 1.22rem; letter-spacing: -.02em; margin-bottom: 10px; }
+  dialog p { color: var(--muted); margin-bottom: 13px; }
+  .dialog-body { display: grid; gap: 10px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
+  .promotions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .promotions button { display: grid; place-items: center; aspect-ratio: 1; padding: 5px; background: #779a8d; border: 2px solid transparent; }
+  .promotions button:hover { border-color: var(--mint); }
+  .fen-input { resize: vertical; font-family: ui-monospace, Consolas, monospace; }
+  .form-error { color: #ffb0b1; font-size: .85rem; }
+  .toast { position: fixed; bottom: 20px; right: 20px; max-width: min(440px, calc(100% - 40px)); padding: 11px 15px; border: 1px solid #587f69; background: #263d32; border-radius: 9px; font-size: .9rem; z-index: 8; box-shadow: 0 6px 22px #050a07aa; }
+  @media (min-width: 1000px) and (max-height: 950px) {
+    .shell { width: min(1088px, calc(100% - 48px), max(900px, calc(100vh + 140px))); }
+  }
+  @media (max-width: 920px) {
+    .shell { width: calc(100% - 34px); }
+    .layout { gap: 15px; }
+  }
+  @media (max-width: 690px) {
+    .top-inner { flex-wrap: wrap; padding: 10px 14px; gap: 9px; min-height: auto; }
+    .brand { font-size: 1.08rem; }
+    .brand-mark { width: 33px; height: 33px; }
+    .brand-mark .piece { width: 28px; height: 28px; }
+    .sound { min-height: 35px; min-width: 35px; padding: 6px; }
+    .nav { order: 3; width: 100%; }
+    .nav button { flex: 1; padding: 7px 3px; gap: 5px; font-size: .78rem; }
+    .nav .icon { width: 15px; height: 15px; }
+    .shell { width: calc(100% - 22px); max-width: 520px; margin-top: 17px; }
+    .page-head { align-items: center; margin-bottom: 14px; }
+    .eyeline { font-size: .8rem; margin-top: 5px; }
+    .badge { padding: 5px 7px; font-size: .72rem; gap: 5px; }
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .arena { gap: 7px; }
+    .boardline { gap: 5px; }
+    .eval { width: 17px; flex-basis: 17px; }
+    .player { min-height: 49px; padding: 5px 8px; }
+    .avatar { width: 32px; height: 32px; }
+    .clock { min-width: 65px; font-size: 1rem; }
+    .rank { top: 3px; left: 3px; } .file { bottom: 3px; right: 3px; }
+  }
+  @media (max-width: 370px) { .nav .icon { display: none; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="top-inner">
+    <div class="brand"><span class="brand-mark" id="brandMark" aria-hidden="true"></span>Thế Cờ</div>
+    <nav class="nav" aria-label="Chế độ chơi">
+      <button type="button" data-mode="bot" aria-pressed="true" data-icon="bot">Đấu với Bot AI</button>
+      <button type="button" data-mode="online" aria-pressed="false" data-icon="globe">Chơi online</button>
+      <button type="button" data-mode="local" aria-pressed="false" data-icon="users">2 người cùng máy</button>
+    </nav>
+    <button class="sound" type="button" id="soundButton" aria-label="Tắt âm thanh" title="Tắt âm thanh" aria-pressed="true"></button>
+  </div>
+</header>
+<main class="shell">
+  <div class="page-head">
+    <div><h1 id="modeTitle">Đấu với Bot AI</h1><p class="eyeline" id="modeSubtitle">Luyện tập với bốn mức độ khó.</p></div>
+    <span class="badge" id="connectionBadge"><span class="dot" aria-hidden="true"></span><span id="connectionText">Chơi ngoại tuyến</span></span>
+  </div>
+  <div class="layout">
+    <section class="arena" aria-label="Khu vực bàn cờ">
+      <div class="player" id="topPlayer"></div>
+      <div class="boardline">
+        <div class="eval" id="evalBar" role="img" aria-label="Đánh giá thế cờ"><div class="eval-fill" id="evalFill"></div><span class="eval-label" id="evalLabel">0.0</span></div>
+        <div class="board" id="board" role="group" aria-label="Bàn cờ vua"></div>
+      </div>
+      <div class="player" id="bottomPlayer"></div>
+    </section>
+    <aside class="sidebar" aria-label="Bảng điều khiển">
+      <div class="card status-card" id="gameStatus" role="status"><span data-icon="flag" aria-hidden="true"></span><strong id="statusText">Lượt quân Trắng</strong></div>
+      <section class="card" id="roomCard" hidden>
+        <div class="card-inner">
+          <h2 class="card-title" data-icon="globe">Phòng chơi</h2>
+          <div id="roomSetup" class="card-inner" style="padding:0">
+            <label>Tên hiển thị<input id="nickname" autocomplete="nickname" maxlength="24" placeholder="Tên của bạn"></label>
+            <div class="field-grid">
+              <label>Màu quân<select id="hostColor"><option value="random">Ngẫu nhiên</option><option value="w">Trắng</option><option value="b">Đen</option></select></label>
+              <label>Đồng hồ<select id="onlineTime"><option value="0">Không giới hạn</option><option value="3">3 phút</option><option value="5" selected>5 phút</option><option value="10">10 phút</option></select></label>
+            </div>
+            <button class="btn primary" id="createRoom" type="button" data-icon="plus">Tạo phòng</button>
+            <div class="join-row"><input id="roomInput" aria-label="Mã phòng" placeholder="CHESS-4829" maxlength="10" autocapitalize="characters" autocomplete="off"><button class="btn" id="joinRoom" type="button">Vào phòng</button></div>
+          </div>
+          <div id="roomInfo" class="room-code" hidden><strong class="code" id="roomCode"></strong>
+            <div class="button-grid"><button class="btn" id="copyCode" type="button" data-icon="copy">Copy mã phòng</button><button class="btn" id="copyInvite" type="button" data-icon="link">Copy link mời</button></div>
+          </div>
+          <button class="btn danger" id="leaveRoom" type="button" hidden>Rời phòng</button>
+        </div>
+      </section>
+      <section class="card" aria-label="Thiết lập và công cụ">
+        <div class="card-inner">
+          <h2 class="card-title" data-icon="sliders">Thiết lập ván</h2>
+          <div class="field-grid" id="offlineSetup">
+            <label id="difficultyField">Độ khó<select id="difficulty"><option value="1">Dễ</option><option value="2" selected>Trung bình</option><option value="3">Khó</option><option value="4">Siêu khó</option></select></label>
+            <label>Đồng hồ<select id="offlineTime"><option value="0" selected>Không giới hạn</option><option value="3">3 phút</option><option value="5">5 phút</option><option value="10">10 phút</option></select></label>
+          </div>
+          <button class="btn primary" type="button" id="newGame" data-icon="plus">Ván mới</button>
+          <div class="divider" aria-hidden="true"></div>
+          <div class="tools">
+            <button class="surface" type="button" id="undo" data-icon="undo">Đi lại</button>
+            <button class="surface" type="button" id="flip" data-icon="flip">Xoay bàn cờ</button>
+            <button class="surface" type="button" id="hint" data-icon="hint">Gợi ý</button>
+            <button class="surface" type="button" id="copyFen" data-icon="copy">Copy FEN</button>
+            <button class="surface" type="button" id="loadFen" data-icon="upload">Nạp FEN</button>
+            <button class="surface" type="button" id="offerDraw" data-icon="handshake">Xin hòa</button>
+            <button class="surface" type="button" id="resign" data-icon="flag">Đầu hàng</button>
+            <button class="surface" type="button" id="claimDraw" data-icon="scale" hidden>Yêu cầu hòa theo luật</button>
+          </div>
+        </div>
+      </section>
+      <section class="card" aria-label="Lịch sử và chat">
+        <div class="panel-head">
+          <button class="panel-tab active" type="button" id="movesTab" aria-controls="movesPanel" aria-pressed="true" data-icon="list">Nước đi</button>
+          <button class="panel-tab" type="button" id="chatTab" aria-controls="chatPanel" aria-pressed="false" data-icon="chat" hidden>Chat</button>
+          <span class="ply-count" id="plyCount">0 nước</span>
+        </div>
+        <div id="movesPanel"><div class="movelist" id="moveList" aria-label="Lịch sử ký hiệu SAN"></div></div>
+        <div id="chatPanel" hidden>
+          <div class="chatlog" id="chatLog" role="log" aria-label="Tin nhắn"></div>
+          <form class="chat-form" id="chatForm"><input id="chatInput" maxlength="240" placeholder="Nhắn cho đối thủ…" aria-label="Tin nhắn"><button class="btn primary" type="submit">Gửi</button></form>
+          <div class="reactions" id="reactions" aria-label="Biểu cảm nhanh">
+            <button class="surface" type="button">👏</button><button class="surface" type="button">🤔</button><button class="surface" type="button">🔥</button><button class="surface" type="button">😅</button><button class="surface" type="button">GG!</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+<dialog id="modal" aria-labelledby="dialogTitle">
+  <h2 id="dialogTitle"></h2><div class="dialog-body" id="dialogBody"></div><div class="dialog-actions" id="dialogActions"></div>
+</dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="ghost" class="ghost" aria-hidden="true" hidden></div>
+<script>
+"use strict";
+
+// Constants, piece-square tables, and the interface-independent chess engine.
+function chessCore() {
+  const PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6;
+  const WHITE = 1, BLACK = -1;
+  const PIECES = " pnbrqk", FILES = "abcdefgh";
+  const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  const VALUE = [0, 100, 320, 330, 500, 900, 20000];
+  const KNIGHT_STEPS = [-33, -31, -18, -14, 14, 18, 31, 33];
+  const DIAGONALS = [-17, -15, 15, 17], ORTHOGONALS = [-16, -1, 1, 16];
+  const ADJACENT = [...DIAGONALS, ...ORTHOGONALS];
+  const SQUARES = Array.from({length: 64}, (_, i) => (i >> 3) * 16 + (i & 7));
+  const CASTLING = [[1, 119, 117, 118], [2, 112, 115, 114], [4, 7, 5, 6], [8, 0, 3, 2]];
+  const RIGHTS_AT = {0: 8, 7: 4, 112: 2, 119: 1};
+  const PROMOTIONS = [QUEEN, ROOK, BISHOP, KNIGHT];
+  const CENTER = [51, 52, 67, 68];
+  const squareName = (sq) => FILES[sq & 7] + (8 - (sq >> 4));
+  const squareIndex = (name) => typeof name === "string" && /^[a-h][1-8]$/.test(name)
+    ? (8 - Number(name[1])) * 16 + FILES.indexOf(name[0]) : -1;
+  const colorName = (color) => color === WHITE ? "w" : "b";
+  const makeResult = (reason, winner = 0) => ({reason, winner});
+  const onBoard = (square) => !(square & 0x88);
+  const sameMove = (a, b) => !!a && !!b && a.from === b.from && a.to === b.to && (a.promotion || 0) === (b.promotion || 0);
+  const moveWire = (move) => ({
+    from: squareName(move.from),
+    to: squareName(move.to),
+    promotion: move.promotion ? PIECES[move.promotion] : null
+  });
+
+  const PST = [null];
+  const kingEndgame = new Int16Array(128);
+  for (let type = PAWN; type <= KING; type++) {
+    const table = PST[type] = new Int16Array(128);
+    for (const sq of SQUARES) {
+      const rank = 7 - (sq >> 4), file = sq & 7;
+      const centerFile = 3.5 - Math.abs(file - 3.5);
+      const centerRank = 3.5 - Math.abs(rank - 3.5);
+      const center = centerFile + centerRank;
+      switch (type) {
+        case PAWN: table[sq] = [0, 0, 8, 14, 20, 35, 64, 0][rank] + centerFile * (rank > 1 && rank < 5 ? 7 : 1); break;
+        case KNIGHT: table[sq] = center * 15 - 55 - (file === 0 || file === 7 ? 8 : 0); break;
+        case BISHOP: table[sq] = center * 7 - 17 + (rank > 0 ? 9 : 0); break;
+        case ROOK: table[sq] = centerFile * 3 + (rank === 6 ? 24 : 0); break;
+        case QUEEN: table[sq] = center * 4 - 10; break;
+        case KING:
+          table[sq] = -center * 12 - rank * 5 + (rank === 0 && (file === 2 || file === 6) ? 38 : 0);
+          kingEndgame[sq] = center * 16 - 48;
+          break;
+      }
+    }
+  }
+
+  class ChessEngine {
+    constructor(fen = START) { this.loadFEN(fen); }
+
+    loadFEN(fen) {
+      const invalid = () => { throw new Error("FEN không hợp lệ."); };
+      const [placement, side, castling, target, half, full, ...extra] = fen.trim().split(/\s+/);
+      if (!placement || !/^[wb]$/.test(side) || !/^(?:-|K?Q?k?q?)$/.test(castling) ||
+          !/^(?:-|[a-h][36])$/.test(target) || !/^\d+$/.test(half) ||
+          !/^[1-9]\d*$/.test(full) || extra.length ||
+          !Number.isSafeInteger(+half) || !Number.isSafeInteger(+full) || +half > 1000000 || +full > 1000000) invalid();
+      const rows = placement.split("/");
+      if (rows.length !== 8) invalid();
+      const board = new Int8Array(128);
+      const kings = {1: -1, "-1": -1};
+      for (const [rank, row] of rows.entries()) {
+        let file = 0;
+        if (!/^(?:[pnbrqkPNBRQK]|[1-8])+$/.test(row) || /[1-8]{2}/.test(row)) invalid();
+        for (const char of row) {
+          if (/[1-8]/.test(char)) { file += +char; continue; }
+          const type = PIECES.indexOf(char.toLowerCase());
+          const color = char === char.toUpperCase() ? WHITE : BLACK;
+          if (file >= 8 || (type === PAWN && (rank === 0 || rank === 7))) invalid();
+          const square = rank * 16 + file++;
+          board[square] = type * color;
+          if (type === KING) {
+            if (kings[color] !== -1) invalid();
+            kings[color] = square;
+          }
+        }
+        if (file !== 8) invalid();
+      }
+      if (kings[WHITE] < 0 || kings[BLACK] < 0) invalid();
+      const turn = side === "w" ? WHITE : BLACK;
+      const rights = [..."KQkq"].reduce((mask, char, i) => mask | (castling.includes(char) ? 1 << i : 0), 0);
+      for (const [bit, rook] of CASTLING) {
+        const color = bit <= 2 ? WHITE : BLACK;
+        if ((rights & bit) && (kings[color] !== (color === WHITE ? 116 : 4) || board[rook] !== color * ROOK)) invalid();
+      }
+      const ep = squareIndex(target);
+      if (ep >= 0 && (board[ep] || board[ep + turn * 16] !== -turn * PAWN ||
+          board[ep - turn * 16] || (ep >> 4) !== (turn === WHITE ? 2 : 5) || +half !== 0)) invalid();
+      if (this.attacked(kings[-turn], turn, board)) invalid();
+      Object.assign(this, {board, kings, turn, rights, ep, half: +half, full: +full, history: []});
+      this.initialFEN = this.fen();
+      this.repetitions = new Map([[this.positionKey(), 1]]);
+    }
+
+    placement() {
+      let output = "";
+      for (let rank = 0; rank < 8; rank++) {
+        if (rank) output += "/";
+        let blank = 0;
+        for (let file = 0; file < 8; file++) {
+          const piece = this.board[rank * 16 + file];
+          if (!piece) { blank++; continue; }
+          if (blank) { output += blank; blank = 0; }
+          const letter = PIECES[Math.abs(piece)];
+          output += piece > 0 ? letter.toUpperCase() : letter;
+        }
+        if (blank) output += blank;
+      }
+      return output;
+    }
+
+    rightsText() { return [..."KQkq"].filter((_, i) => this.rights & (1 << i)).join("") || "-"; }
+
+    fen() {
+      return [this.placement(), colorName(this.turn), this.rightsText(), this.ep < 0 ? "-" : squareName(this.ep),
+        this.half, this.full].join(" ");
+    }
+
+    effectiveEnPassant() {
+      if (this.ep < 0) return -1;
+      const {board, ep, turn} = this;
+      const landed = ep + 16 * turn;
+      for (const from of [landed - 1, landed + 1]) {
+        if (!onBoard(from) || board[from] !== turn * PAWN) continue;
+        board[from] = board[landed] = 0;
+        board[ep] = turn * PAWN;
+        const legal = !this.inCheck(turn);
+        board[ep] = 0;
+        board[from] = turn * PAWN;
+        board[landed] = -turn * PAWN;
+        if (legal) return ep;
+      }
+      return -1;
+    }
+
+    positionKey() {
+      const ep = this.effectiveEnPassant();
+      return [this.placement(), colorName(this.turn), this.rightsText(), ep < 0 ? "-" : squareName(ep)].join(" ");
+    }
+
+    attacked(square, by, board = this.board) {
+      for (const step of [-1, 1]) {
+        const source = square + by * 16 + step;
+        if (onBoard(source) && board[source] === by * PAWN) return true;
+      }
+      for (const step of KNIGHT_STEPS) {
+        const source = square + step;
+        if (onBoard(source) && board[source] === by * KNIGHT) return true;
+      }
+      for (const [index, step] of ADJACENT.entries()) {
+        for (let source = square + step; onBoard(source); source += step) {
+          const piece = board[source];
+          if (!piece) continue;
+          const type = piece * by;
+          if (type === QUEEN || type === (index < 4 ? BISHOP : ROOK) ||
+              (type === KING && source === square + step)) return true;
+          break;
+        }
+      }
+      return false;
+    }
+
+    inCheck(color = this.turn) { return this.attacked(this.kings[color], -color); }
+
+    pseudoMoves() {
+      const {turn, board} = this;
+      const moves = [];
+      const pawnMove = (from, to, captured = 0, enPassant = false) => {
+        if ((to >> 4) === (turn === WHITE ? 0 : 7)) {
+          for (const promotion of PROMOTIONS) moves.push({from, to, captured, promotion});
+        } else {
+          moves.push({from, to, captured, enPassant});
+        }
+      };
+      for (const from of SQUARES) {
+        const type = turn * board[from];
+        if (type <= 0) continue;
+        if (type === PAWN) {
+          const step = -16 * turn, next = from + step;
+          if (onBoard(next) && !board[next]) {
+            pawnMove(from, next);
+            const double = next + step;
+            if ((from >> 4) === (turn === WHITE ? 6 : 1) && !board[double]) pawnMove(from, double);
+          }
+          for (const to of [next - 1, next + 1]) {
+            if (!onBoard(to)) continue;
+            if (to === this.ep) pawnMove(from, to, -turn * PAWN, true);
+            else if (board[to] * turn < 0 && Math.abs(board[to]) !== KING) pawnMove(from, to, board[to]);
+          }
+          continue;
+        }
+        const steps = type === KNIGHT ? KNIGHT_STEPS : type === BISHOP ? DIAGONALS
+          : type === ROOK ? ORTHOGONALS : ADJACENT;
+        const slides = type !== KNIGHT && type !== KING;
+        for (const step of steps) {
+          for (let to = from + step; onBoard(to); to += step) {
+            const captured = board[to];
+            if (captured * turn > 0 || Math.abs(captured) === KING) break;
+            moves.push({from, to, captured});
+            if (captured || !slides) break;
+          }
+        }
+        if (type !== KING || !this.rights || from !== (turn === WHITE ? 116 : 4) || this.inCheck()) continue;
+        for (const [bit, rook, via, to] of CASTLING) {
+          if (!(this.rights & bit) || (bit <= 2) !== (turn === WHITE) || board[rook] !== ROOK * turn) continue;
+          if (board[via] || board[to] || (to < from && board[to - 1])) continue;
+          if (!this.attacked(via, -turn) && !this.attacked(to, -turn)) moves.push({from, to, captured: 0, rook, via});
+        }
+      }
+      return moves;
+    }
+
+    legalMoves() {
+      const moving = this.turn, legal = [];
+      for (const move of this.pseudoMoves()) {
+        const undo = this.push(move);
+        const safe = !this.inCheck(moving);
+        this.pop(undo);
+        if (safe) legal.push(move);
+      }
+      return legal;
+    }
+
+    push(move) {
+      const {board, turn} = this, {from, to} = move;
+      const piece = board[from], type = turn * piece;
+      const capturedAt = move.enPassant ? to + turn * 16 : to;
+      const undo = {move, piece, capturedAt, rights: this.rights, ep: this.ep, half: this.half};
+      board[from] = board[capturedAt] = 0;
+      board[to] = move.promotion ? move.promotion * turn : piece;
+      if (move.rook !== undefined) {
+        board[move.rook] = 0;
+        board[move.via] = turn * ROOK;
+      }
+      if (type === KING) {
+        this.kings[turn] = to;
+        this.rights &= turn === WHITE ? 12 : 3;
+      }
+      this.rights &= ~((RIGHTS_AT[from] || 0) | (RIGHTS_AT[to] || 0));
+      this.ep = type === PAWN && Math.abs(to - from) === 32 ? (from + to) >> 1 : -1;
+      this.half = type === PAWN || move.captured ? 0 : this.half + 1;
+      if (turn === BLACK) this.full++;
+      this.turn = -turn;
+      return undo;
+    }
+
+    pop(undo) {
+      const {move, piece, capturedAt} = undo;
+      const turn = this.turn = -this.turn;
+      const {board} = this;
+      board[move.to] = 0;
+      board[move.from] = piece;
+      board[capturedAt] = move.captured;
+      if (move.rook !== undefined) {
+        board[move.rook] = turn * ROOK;
+        board[move.via] = 0;
+      }
+      if (piece * turn === KING) this.kings[turn] = move.from;
+      if (turn === BLACK) this.full--;
+      this.rights = undo.rights;
+      this.ep = undo.ep;
+      this.half = undo.half;
+    }
+
+    resolve(input, legal = this.legalMoves()) {
+      if (!input) return null;
+      const from = typeof input.from === "number" ? input.from : squareIndex(input.from);
+      const to = typeof input.to === "number" ? input.to : squareIndex(input.to);
+      const promotion = typeof input.promotion === "string"
+        ? PIECES.indexOf(input.promotion.toLowerCase()) : input.promotion ?? 0;
+      return legal.find((move) => sameMove(move, {from, to, promotion})) || null;
+    }
+
+    sanBase(move, legal) {
+      const {from, to, captured, promotion, rook} = move;
+      if (rook !== undefined) return to > from ? "O-O" : "O-O-O";
+      const type = Math.abs(this.board[from]), source = squareName(from);
+      let notation = type === PAWN ? (captured ? source[0] : "") : PIECES[type].toUpperCase();
+      if (type !== PAWN) {
+        const conflicts = legal.filter((other) => other.from !== from && other.to === to && this.board[other.from] === this.board[from]);
+        if (conflicts.length) {
+          if (!conflicts.some((other) => (other.from & 7) === (from & 7))) notation += source[0];
+          else if (!conflicts.some((other) => (other.from >> 4) === (from >> 4))) notation += source[1];
+          else notation += source;
+        }
+      }
+      return notation + (captured ? "x" : "") + squareName(to) + (promotion ? "=" + PIECES[promotion].toUpperCase() : "");
+    }
+
+    makeMove(input, legal = this.legalMoves()) {
+      const move = this.resolve(input, legal);
+      if (!move) return null;
+      const side = this.turn, number = this.full;
+      let san = this.sanBase(move, legal);
+      const undo = this.push(move), key = this.positionKey();
+      this.repetitions.set(key, (this.repetitions.get(key) || 0) + 1);
+      if (this.inCheck()) san += this.legalMoves().length ? "+" : "#";
+      const record = {move, side, number, san, key, undo};
+      this.history.push(record);
+      return record;
+    }
+
+    unmakeMove() {
+      const record = this.history.pop();
+      if (!record) return null;
+      const count = this.repetitions.get(record.key);
+      if (count === 1) this.repetitions.delete(record.key);
+      else this.repetitions.set(record.key, count - 1);
+      this.pop(record.undo);
+      return record;
+    }
+
+    hasMatingMaterial(color) {
+      let knights = 0, bishopColors = 0, otherMinors = 0, otherBishopColors = 0;
+      for (const square of SQUARES) {
+        const type = this.board[square] * color;
+        if (type === PAWN || type === ROOK || type === QUEEN) return true;
+        const parity = 1 << (((square >> 4) + (square & 7)) & 1);
+        if (type === KNIGHT) knights++;
+        if (type === BISHOP) bishopColors |= parity;
+        if (type === -PAWN || type === -KNIGHT) otherMinors++;
+        if (type === -BISHOP) otherBishopColors |= parity;
+      }
+      if (knights) {
+        return !!(knights > 1 || bishopColors || otherBishopColors || otherMinors ||
+          SQUARES.some((square) => this.board[square] === -color * ROOK || this.board[square] === -color * QUEEN));
+      }
+      return !!(bishopColors === 3 || (bishopColors && (otherMinors || (otherBishopColors & ~bishopColors))));
+    }
+
+    insufficientMaterial() { return !this.hasMatingMaterial(WHITE) && !this.hasMatingMaterial(BLACK); }
+
+    outcome(legal = this.legalMoves()) {
+      if (!legal.length) return this.inCheck() ? makeResult("checkmate", -this.turn) : makeResult("stalemate");
+      if (this.insufficientMaterial()) return makeResult("material");
+      if (this.half >= 150) return makeResult("seventyFive");
+      if ((this.repetitions.get(this.positionKey()) || 0) >= 5) return makeResult("fivefold");
+      return null;
+    }
+
+    drawClaim(input = null, legal = this.legalMoves()) {
+      const candidate = input ? this.resolve(input, legal) : null;
+      if (input && !candidate) return null;
+      const undo = candidate ? this.push(candidate) : null;
+      const count = (this.repetitions.get(this.positionKey()) || 0) + (candidate ? 1 : 0);
+      const result = count >= 3 ? makeResult("threefold") : this.half >= 100 ? makeResult("fifty") : null;
+      if (undo) this.pop(undo);
+      return result;
+    }
+
+    claimOptions(legal) {
+      const now = this.drawClaim(null, legal);
+      if (now) return {now, moves: []};
+      if (this.half < 99 && ![...this.repetitions.values()].some((count) => count >= 2)) return {now: null, moves: []};
+      return {now: null, moves: legal.filter((move) => this.drawClaim(move, legal))};
+    }
+  }
+
+  function evaluate(engine, positional = true) {
+    let score = 0, phase = 0, openingKing = 0, endingKing = 0, whiteBishops = 0, blackBishops = 0;
+    for (const square of SQUARES) {
+      const piece = engine.board[square];
+      if (!piece) continue;
+      const type = Math.abs(piece), side = piece > 0 ? WHITE : BLACK;
+      score += side * VALUE[type];
+      if (!positional) continue;
+      const relative = side === WHITE ? square : square ^ 112;
+      if (type === KING) {
+        openingKing += side * PST[KING][relative];
+        endingKing += side * kingEndgame[relative];
+        continue;
+      }
+      score += side * PST[type][relative];
+      phase += [0, 0, 1, 1, 2, 4][type];
+      if (type === BISHOP) {
+        if (side === WHITE) whiteBishops++;
+        else blackBishops++;
+      }
+    }
+    let center = 0;
+    if (positional) {
+      for (const square of CENTER) center += Number(engine.attacked(square, WHITE)) - Number(engine.attacked(square, BLACK));
+    }
+    const middleWeight = Math.min(24, phase) / 24;
+    return Math.round(score + 8 * center + middleWeight * openingKing + (1 - middleWeight) * endingKing
+      + (whiteBishops >= 2 ? 30 : 0) - (blackBishops >= 2 ? 30 : 0));
+  }
+
+  return {ChessEngine, WHITE, BLACK, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, START, SQUARES, VALUE,
+    PIECES, evaluate, squareName, squareIndex, colorName, sameMove, moveWire, makeResult};
+}
+</script>
+<script>
+"use strict";
+
+// This function and the same core engine are compiled into a Blob worker.
+function installAIWorker() {
+  const {ChessEngine, START, VALUE, evaluate, sameMove, moveWire} = chessCore();
+  const BOOK = [
+    ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6"],
+    ["e2e4", "c7c5", "g1f3", "b8c6", "d2d4", "c5d4", "f3d4", "g8f6"],
+    ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6"],
+    ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "c2c3", "g8f6"],
+    ["d2d4", "d7d5", "c2c4", "e7e6", "b1c3", "g8f6", "c1g5", "f8e7"],
+    ["d2d4", "d7d5", "c2c4", "d5c4", "g1f3", "g8f6", "e2e3", "e7e6"]
+  ];
+  const MATE = 30000;
+  const ABORT = Symbol("deadline");
+  const randomPick = (items) => items[Math.floor(Math.random() * items.length)];
+
+  function search(input) {
+    const engine = new ChessEngine(input.fen);
+    const difficulty = input.level;
+    const positional = difficulty >= 2, tactical = difficulty >= 3;
+    const rootMoves = engine.legalMoves();
+    if (!rootMoves.length) return null;
+    if (tactical && input.book && input.initial === START) {
+      const ply = input.line.length;
+      const next = new Set(BOOK.filter((line) => line.length > ply && input.line.every((move, i) => move === line[i]))
+        .map((line) => line[ply]));
+      const options = rootMoves.filter((move) => {
+        const wire = moveWire(move);
+        return next.has(wire.from + wire.to);
+      });
+      if (options.length) return {move: moveWire(randomPick(options)), book: true};
+    }
+
+    const counts = new Map(input.repetitions);
+    const deadline = performance.now() + Math.min(2400, input.budget);
+    const expired = () => { if (performance.now() >= deadline) throw ABORT; };
+    const staticScore = () => engine.turn * evaluate(engine, positional);
+    let nodes = 0;
+
+    function ordered(moves, preferred = null) {
+      return moves.map((move) => {
+        const victim = Math.abs(move.captured), attacker = Math.abs(engine.board[move.from]);
+        let priority = victim ? 10000 + 12 * VALUE[victim] - Math.min(VALUE[attacker], 1100) : 0;
+        if (move.promotion) priority += 8000 + VALUE[move.promotion];
+        const undo = engine.push(move);
+        if (engine.inCheck()) priority += 3500;
+        engine.pop(undo);
+        if (sameMove(move, preferred)) priority += 100000;
+        return {move, priority};
+      }).sort((a, b) => b.priority - a.priority).map((entry) => entry.move);
+    }
+
+    function visit(move, continuation) {
+      const undo = engine.push(move);
+      const key = engine.half >= 4 ? engine.positionKey() : null;
+      const previous = key === null ? 0 : counts.get(key) || 0;
+      if (key !== null) counts.set(key, previous + 1);
+      try {
+        return continuation(previous + 1);
+      } finally {
+        if (key !== null) {
+          if (previous) counts.set(key, previous);
+          else counts.delete(key);
+        }
+        engine.pop(undo);
+      }
+    }
+
+    // Negamax is the symmetric form of minimax. Alpha and beta bound the score
+    // from the side to move. Quiescence extends captures and mandatory evasions.
+    function negamax(depth, alpha, beta, ply, repeated, qply = 0) {
+      if ((++nodes & 31) === 0) expired();
+      const checked = engine.inCheck();
+      let moves = engine.legalMoves();
+      if (!moves.length) return checked ? -MATE + ply : 0;
+      if (repeated >= 5 || engine.half >= 150 || engine.insufficientMaterial()) return 0;
+      const canClaim = repeated >= 3 || engine.half >= 100;
+      if (canClaim) {
+        if (beta <= 0) return 0;
+        alpha = Math.max(0, alpha);
+      }
+      if (depth <= 0) {
+        const stand = staticScore();
+        if (!tactical || qply >= 10) return canClaim ? Math.max(0, stand) : stand;
+        if (!checked) {
+          if (stand >= beta) return stand;
+          alpha = Math.max(alpha, stand);
+          if (qply >= 6) return alpha;
+          moves = moves.filter((move) => move.captured || move.promotion);
+        }
+      }
+      for (const move of ordered(moves)) {
+        const score = visit(move, (repetitions) =>
+          -negamax(depth - 1, -beta, -alpha, ply + 1, repetitions, depth <= 0 ? qply + 1 : 0));
+        if (score >= beta) return score;
+        alpha = Math.max(alpha, score);
+      }
+      return alpha;
+    }
+
+    let best = rootMoves[0], bestScore = -Infinity, completedDepth = 0, rankings = [];
+    for (let depth = 1; depth <= difficulty; depth++) {
+      try {
+        let alpha = -Infinity;
+        const scores = [];
+        for (const move of ordered(rootMoves, completedDepth ? best : null)) {
+          expired();
+          const bound = difficulty === 1 ? Infinity : -alpha;
+          const rank = visit(move, (repetitions) => ({
+            score: -negamax(depth - 1, -Infinity, bound, 1, repetitions),
+            positionTie: difficulty === 1 ? -engine.turn * evaluate(engine) : 0
+          }));
+          scores.push({move, ...rank});
+          alpha = Math.max(alpha, rank.score);
+        }
+        rankings = scores.sort((a, b) => b.score - a.score || b.positionTie - a.positionTie);
+        best = rankings[0].move;
+        bestScore = rankings[0].score;
+        completedDepth = depth;
+        if (Math.abs(bestScore) > MATE - 100) break;
+      } catch (error) {
+        if (error !== ABORT) throw error;
+        break;
+      }
+    }
+    if (difficulty === 1 && input.random && rankings.length > 1 && Math.abs(bestScore) < MATE - 100 && Math.random() < .16) {
+      best = randomPick(rankings.slice(1, 4)).move;
+    }
+    const claim = bestScore < 0 && completedDepth && input.allowClaim
+      ? engine.claimOptions(rootMoves) : null;
+    if (claim?.now) return {claim: true, move: null, depth: completedDepth};
+    if (claim?.moves.length) return {claim: true, move: moveWire(claim.moves[0]), depth: completedDepth};
+    return {move: moveWire(best), depth: completedDepth, nodes, score: bestScore};
+  }
+
+  self.onmessage = ({data}) => {
+    try { self.postMessage({answer: search(data)}); }
+    catch (error) { self.postMessage({error: error.message}); }
+  };
+}
+
+const core = chessCore();
+
+class AIWorker {
+  constructor() { this.active = null; }
+
+  cancel() { this.active?.finish(null); }
+
+  find(engine, level, options = {}) {
+    this.cancel();
+    return new Promise((resolve, reject) => {
+      let url, worker;
+      const finish = (answer, error) => {
+        if (worker) worker.terminate();
+        if (url) URL.revokeObjectURL(url);
+        if (this.active?.finish === finish) this.active = null;
+        if (error) reject(error);
+        else resolve(answer);
+      };
+      this.active = {finish};
+      try {
+        const source = chessCore.toString() + "\n(" + installAIWorker.toString() + ")();";
+        url = URL.createObjectURL(new Blob([source], {type: "text/javascript"}));
+        worker = new Worker(url);
+        worker.onerror = (event) => finish(null, new Error(event.message || "Web Worker không khởi động được."));
+        worker.onmessage = ({data}) => finish(data.answer, data.error && new Error(data.error));
+        worker.postMessage({
+          fen: engine.fen(), initial: engine.initialFEN, level,
+          repetitions: [...engine.repetitions],
+          line: engine.history.map(({move}) => {
+            const wire = core.moveWire(move);
+            return wire.from + wire.to + (wire.promotion || "");
+          }),
+          book: !!options.book, random: !!options.random, allowClaim: !!options.allowClaim,
+          budget: options.budget ?? 2400
+        });
+      } catch (error) {
+        finish(null, error);
+      }
+    });
+  }
+}
+</script>
+<script>
+"use strict";
+
+const icons = {
+  bot: '<rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 7V3m-2 0h4M2 13h2m16 0h2m-13-1v2m6-2v2"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/>',
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m1-15a3 3 0 0 1 0 6m1 3a4 4 0 0 1 4 4v2"/>',
+  user: '<circle cx="12" cy="8" r="3.5"/><path d="M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/>',
+  sound: '<path d="M4 9h4l5-4v14l-5-4H4Zm12 0a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/>',
+  mute: '<path d="M4 9h4l5-4v14l-5-4H4Zm12 1 5 5m0-5-5 5"/>',
+  flag: '<path d="M5 21V4m0 1c5-4 9 4 14 0v11c-5 4-9-4-14 0"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  sliders: '<path d="M4 7h16M4 12h16M4 17h16"/><path d="M9 5v4m6 1v4m-7 1v4" stroke-width="3"/>',
+  undo: '<path d="m8 5-4 4 4 4M4 9h10a5 5 0 0 1 0 10h-4"/>',
+  flip: '<path d="M4 10a8 8 0 0 1 14-4l2 2m0-4v4h-4M20 14a8 8 0 0 1-14 4l-2-2m0 4v-4h4"/>',
+  hint: '<path d="M9 18h6m-5 3h4m-4-5c0-2-4-3-4-7a6 6 0 0 1 12 0c0 4-4 5-4 7"/>',
+  copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2"/>',
+  upload: '<path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+  handshake: '<path d="m3 12 4-7 4 2m10 5-4-7-5 2-4 4c1 2 3 1 4 0l1-1 5 5-4 4-2 1-7-5-2-3Z"/>',
+  scale: '<path d="M12 4v16m-5 0h10M4 8h16M6 8l-3 6h6L6 8Zm12 0-3 6h6l-3-6Z"/>',
+  list: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/>',
+  chat: '<path d="M20 11a8 8 0 0 1-8 8H5l1-4a8 8 0 1 1 14-4Z"/><path d="M9 11h6"/>',
+  link: '<path d="m9 15 6-6m-7 8-1 1a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0m2 6a3.5 3.5 0 0 0 5 0l4-4a3.5 3.5 0 0 0-5-5l-1 1"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+};
+const icon = (name) => '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[name] + "</svg>";
+const piecePaths = [
+  "",
+  '<path d="M32 8a10 10 0 0 0-6 18c-2 7-6 12-10 15l-2 8h36l-2-8c-4-3-8-8-10-15A10 10 0 0 0 32 8Z"/><path class="detail" d="M25 28h14M17 42h30"/>',
+  '<path d="M16 47c1-11 11-15 16-23l-12 6-8-3 6-13 10-6 1-5 6 4c17 1 19 18 15 40Z"/><path class="detail" d="M31 11c12 4 16 13 13 26m-21-18 3-2m-10 6 2-1m-1 19h32"/>',
+  '<path d="M30 6a3 3 0 1 0 4 0l-2-2Zm2 5c-6 4-14 11-14 18 0 4 3 8 7 10l-9 4-2 6h36l-2-6-9-4c4-2 7-6 7-10 0-7-8-14-14-18Z"/><path class="detail" d="m35 17-8 13m-3 9h16m-23 5h30"/>',
+  '<path d="M15 9h7v7h6V9h8v7h6V9h7v15l-6 5v15l6 4H15l6-4V29l-6-5Z"/><path class="detail" d="M17 24h30M21 30h22m-23 13h24"/>',
+  '<path d="M10 17 21 27l-2-14 9 12 4-17 4 17 9-12-2 14 11-10-8 24 4 8H14l4-8Z"/><circle cx="10" cy="15" r="3.5"/><circle cx="19" cy="12" r="3.5"/><circle cx="32" cy="8" r="4"/><circle cx="45" cy="12" r="3.5"/><circle cx="54" cy="15" r="3.5"/><path class="detail" d="M20 35h24m-25 7h26"/>',
+  '<path d="M32 12v11m-5-15h10m-5-5v8" class="cross"/><path d="M32 23c-7-13-26-9-23 5 1 6 6 10 11 14l-5 7h34l-5-7c5-4 10-8 11-14 3-14-16-18-23-5Z"/><path class="detail" d="M32 23v12m-13 3h26m-25 5h24"/>'
+];
+const PIECE_NAMES = ["", "Tốt", "Mã", "Tượng", "Xe", "Hậu", "Vua"];
+const sideText = (side) => side === core.WHITE ? "Trắng" : "Đen";
+
+function pieceSVG(piece) {
+  if (!piece) return "";
+  const color = piece > 0 ? "white" : "black";
+  return '<svg class="piece ' + color + '" aria-hidden="true" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">' +
+    '<g transform="translate(2 2) scale(.9375)" style="fill:var(--piece-fill);stroke:var(--piece-stroke)" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round">' +
+    piecePaths[Math.abs(piece)].replaceAll('class="detail"', 'fill="none" style="stroke:var(--piece-detail)" stroke-width="1.75"') +
+    '<path d="M16 48h32l4 5v5H12v-5Z"/><path d="M15 54h34" fill="none" style="stroke:var(--piece-detail)" stroke-width="1.6"/></g></svg>';
+}
+
+class SoundManager {
+  constructor() {
+    this.context = null;
+    this.enabled = true;
+    try { this.enabled = localStorage.getItem("the-co-sound") !== "off"; } catch {}
+  }
+
+  toggle() {
+    this.enabled = !this.enabled;
+    try { localStorage.setItem("the-co-sound", this.enabled ? "on" : "off"); } catch {}
+    if (this.enabled) this.play("move");
+    return this.enabled;
+  }
+
+  unlock() {
+    if (!this.enabled) return;
+    try {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!this.context && Audio) this.context = new Audio();
+      if (this.context?.state === "suspended") this.context.resume().catch(() => {});
+    } catch {}
+  }
+
+  play(kind) {
+    if (!this.enabled) return;
+    this.unlock();
+    const audio = this.context;
+    if (!audio || audio.state !== "running") return;
+    const patterns = {
+      move: [[355, 125, .085, 0, .13, "sine"]],
+      capture: [[160, 55, .14, 0, .17, "triangle"], [630, 210, .045, 0, .07, "sine"]],
+      castle: [[300, 130, .08, 0, .12, "sine"], [440, 190, .10, .066, .11, "sine"]],
+      check: [[380, 210, .12, 0, .13, "triangle"], [660, 410, .17, .095, .09, "sine"]],
+      promote: [[440, 440, .15, 0, .10, "triangle"], [550, 550, .18, .07, .10, "triangle"], [880, 880, .22, .14, .08, "sine"]],
+      message: [[660, 660, .11, 0, .075, "sine"], [880, 880, .16, .075, .07, "sine"]],
+      end: [[392, 392, .22, 0, .095, "triangle"], [495, 495, .23, .10, .08, "triangle"], [587, 587, .34, .20, .08, "sine"]]
+    };
+    for (const [frequency, tail, duration, delay, amplitude, type] of patterns[kind] || []) {
+      const start = audio.currentTime + delay, oscillator = audio.createOscillator(), gain = audio.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(tail, start + duration);
+      gain.gain.setValueAtTime(.001, start);
+      gain.gain.exponentialRampToValueAtTime(amplitude, start + .008);
+      gain.gain.exponentialRampToValueAtTime(.001, start + duration);
+      oscillator.connect(gain);
+      gain.connect(audio.destination);
+      oscillator.start(start);
+      oscillator.stop(start + duration + .015);
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    }
+  }
+}
+</script>
+<script>
+"use strict";
+
+const RESULT_TEXT = {
+  checkmate: "Chiếu bí", stalemate: "Hòa do hết nước đi", material: "Hòa do không đủ lực lượng chiếu bí",
+  fifty: "Hòa theo luật 50 nước", threefold: "Hòa do lặp thế cờ ba lần",
+  seventyFive: "Hòa theo luật 75 nước", fivefold: "Hòa do lặp thế cờ năm lần",
+  timeout: "Hết giờ", timeoutDraw: "Hòa do hết giờ và đối thủ không thể chiếu bí",
+  resign: "Đầu hàng", resignDraw: "Hòa do đầu hàng và đối thủ không thể chiếu bí",
+  agreement: "Hòa thỏa thuận"
+};
+const TIMER_OPTIONS = new Set([0, 3, 5, 10]);
+const ROOM_CODE = /^CHESS-[0-9]{4}$/;
+const validColor = (side) => side === core.WHITE || side === core.BLACK;
+const cleanName = (value) => typeof value === "string" ? value.trim().slice(0, 24) || "Kỳ thủ" : "Kỳ thủ";
+
+class ChessMatch {
+  constructor(minutes = 0, fen = core.START, running = true, now = () => performance.now()) {
+    this.engine = new core.ChessEngine(fen);
+    this.minutes = minutes;
+    this.base = [minutes * 60000, minutes * 60000];
+    this.clockHistory = [];
+    this.now = now;
+    this.since = now();
+    this.legal = this.engine.legalMoves();
+    this.result = this.engine.outcome(this.legal);
+    this.running = running && !this.result;
+    this.claims = this.result ? {now: null, moves: []} : this.engine.claimOptions(this.legal);
+  }
+
+  index(side) { return side === core.WHITE ? 0 : 1; }
+
+  times() {
+    const times = this.base.slice();
+    if (this.running && this.minutes) {
+      const index = this.index(this.engine.turn);
+      times[index] = Math.max(0, times[index] - (this.now() - this.since));
+    }
+    return times;
+  }
+
+  readClocks({whiteTime, blackTime}, running = this.running) {
+    this.base = [whiteTime, blackTime];
+    this.since = this.now();
+    this.running = running && !this.result;
+  }
+
+  clockPacket() {
+    const [whiteTime, blackTime] = this.times().map(Math.ceil);
+    return {whiteTime, blackTime};
+  }
+
+  updatePosition() {
+    this.legal = this.engine.legalMoves();
+    this.result = this.engine.outcome(this.legal);
+    this.claims = this.result ? {now: null, moves: []} : this.engine.claimOptions(this.legal);
+  }
+
+  project(move) {
+    const undo = this.engine.push(move);
+    const fen = this.engine.fen();
+    this.engine.pop(undo);
+    return fen;
+  }
+
+  play(move) {
+    if (!this.running || this.result) return null;
+    const clocks = this.times();
+    const record = this.engine.makeMove(move, this.legal);
+    if (!record) return null;
+    this.clockHistory.push(clocks.slice());
+    this.base = clocks;
+    this.since = this.now();
+    this.updatePosition();
+    this.running = !this.result;
+    return record;
+  }
+
+  undo(count = 1) {
+    if (!this.engine.history.length) return false;
+    for (let i = 0; i < count && this.engine.history.length; i++) {
+      this.engine.unmakeMove();
+      this.base = this.clockHistory.pop();
+    }
+    this.since = this.now();
+    this.updatePosition();
+    this.running = !this.result;
+    return true;
+  }
+
+  finish(result) {
+    if (this.result) return false;
+    this.base = this.times();
+    this.running = false;
+    this.result = result;
+    return true;
+  }
+
+  timeout() {
+    const side = this.engine.turn;
+    if (!this.running || !this.minutes || this.times()[this.index(side)] > 0) return false;
+    const wins = this.engine.hasMatingMaterial(-side);
+    return this.finish(core.makeResult(wins ? "timeout" : "timeoutDraw", wins ? -side : 0));
+  }
+
+  resign(side) {
+    const wins = this.engine.hasMatingMaterial(-side);
+    return this.finish(core.makeResult(wins ? "resign" : "resignDraw", wins ? -side : 0));
+  }
+
+  claim(input) {
+    const result = this.engine.drawClaim(input, this.legal);
+    return result ? this.finish(result) : false;
+  }
+}
+
+class MultiplayerManager {
+  constructor(handlers) {
+    this.handlers = handlers;
+    this.role = null;
+    this.peer = null;
+    this.conn = null;
+    this.phase = "idle";
+    this.code = "";
+    this.token = 0;
+    this.timer = null;
+  }
+
+  change(phase, detail) {
+    this.phase = phase;
+    this.handlers.status(phase, detail);
+  }
+
+  get connected() { return this.phase === "connected" && !!this.conn?.open; }
+
+  static loadPeer() {
+    if (window.Peer) return Promise.resolve(window.Peer);
+    if (!this.loading) {
+      this.loading = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
+        const finish = (error) => {
+          clearTimeout(timer);
+          if (!error && window.Peer) resolve(window.Peer);
+          else {
+            script.remove();
+            reject(new Error(error || "Không tìm thấy thư viện PeerJS."));
+          }
+        };
+        const timer = setTimeout(() => finish("Tải PeerJS quá thời gian."), 10000);
+        script.onload = () => finish();
+        script.onerror = () => finish("Không tải được PeerJS. Hãy kiểm tra kết nối mạng.");
+        document.head.append(script);
+      }).catch((error) => { this.loading = null; throw error; });
+    }
+    return this.loading;
+  }
+
+  async open(role, code = "") {
+    this.close(false);
+    this.role = role;
+    this.code = code;
+    const token = this.token;
+    this.change("connecting");
+    try {
+      const Peer = await MultiplayerManager.loadPeer();
+      if (this.token !== token) return;
+      this.startPeer(Peer, token, 0);
+    } catch (error) {
+      if (this.token === token) this.fail(error.message);
+    }
+  }
+
+  startPeer(Peer, token, attempts) {
+    const host = this.role === "host";
+    if (host) this.code = "CHESS-" + (crypto.getRandomValues(new Uint16Array(1))[0] % 9000 + 1000);
+    const peer = this.peer = host ? new Peer(this.code) : new Peer();
+    const current = () => this.token === token && this.peer === peer;
+    this.waitFor("Máy chủ kết nối không phản hồi.");
+    peer.on("open", () => {
+      if (!current()) return;
+      if (host) {
+        clearTimeout(this.timer);
+        this.change("waiting");
+      } else {
+        this.waitFor("Hết thời gian chờ đối thủ. Hãy kiểm tra mã phòng và kết nối mạng.");
+        this.bind(peer.connect(this.code, {reliable: true}), token);
+      }
+    });
+    peer.on("connection", (connection) => {
+      if (!current() || !host || this.conn || this.phase !== "waiting") { connection.close(); return; }
+      this.waitFor("Không thiết lập được kết nối tới đối thủ.");
+      this.bind(connection, token);
+    });
+    peer.on("error", (error) => {
+      if (!current()) return;
+      if (host && error.type === "unavailable-id" && attempts < 7) {
+        this.peer = null;
+        peer.destroy();
+        this.startPeer(Peer, token, attempts + 1);
+        return;
+      }
+      if (this.connected && (error.type === "network" || error.type === "disconnected")) return;
+      this.fail(error.type === "peer-unavailable" ? "Không tìm thấy phòng. Kiểm tra mã phòng và trạng thái chủ phòng."
+        : "Không thể kết nối qua PeerJS (" + (error.type || "lỗi mạng") + ").");
+    });
+    peer.on("disconnected", () => {
+      if (current() && !this.connected) this.fail("Đã mất kết nối với máy chủ PeerJS.");
+    });
+  }
+
+  waitFor(message) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.fail(message), 17000);
+  }
+
+  bind(connection, token) {
+    this.conn = connection;
+    const current = () => this.token === token && this.conn === connection;
+    connection.on("data", (packet) => {
+      if (current() && packet && typeof packet === "object" && typeof packet.type === "string") this.handlers.data(packet);
+    });
+    connection.on("open", () => {
+      if (!current()) return;
+      this.waitFor("Đối thủ chưa hoàn tất quá trình vào phòng.");
+      this.change("handshake");
+      this.handlers.open();
+    });
+    connection.on("close", () => {
+      if (current()) this.fail("Đối thủ đã thoát phòng.", "left");
+    });
+    connection.on("error", () => {
+      if (current()) this.fail("Mất kết nối trực tiếp với đối thủ.", "left");
+    });
+  }
+
+  ready() {
+    clearTimeout(this.timer);
+    this.change("connected");
+  }
+
+  send(packet) {
+    if (!this.conn?.open) return false;
+    try {
+      this.conn.send(packet);
+      return true;
+    } catch {
+      this.fail("Không thể gửi dữ liệu tới đối thủ.", "left");
+      return false;
+    }
+  }
+
+  fail(message, phase = "error") {
+    this.close(false);
+    this.change(phase, message);
+  }
+
+  close(notify = true) {
+    if (notify && this.connected) this.send({type: "LEAVE"});
+    this.token++;
+    clearTimeout(this.timer);
+    const connection = this.conn, peer = this.peer;
+    this.conn = this.peer = null;
+    this.role = null;
+    this.code = "";
+    connection?.close();
+    peer?.destroy();
+    this.phase = "idle";
+    if (notify) this.change("idle");
+  }
+}
+</script>
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const MODE = {
+  bot: ["Đấu với Bot AI", "Luyện tập với bốn mức độ khó."],
+  online: ["Chơi online", "Mời bạn bè bằng mã phòng hoặc link."],
+  local: ["2 người cùng máy", "Luân phiên di chuyển trên cùng một bàn cờ."]
+};
+const button = (text, action, primary = false) => {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.className = primary ? "btn primary" : "btn";
+  element.textContent = text;
+  element.addEventListener("click", action);
+  return element;
+};
+
+class UIRenderer {
+  constructor(app) {
+    this.app = app;
+    this.board = $("board");
+    this.modal = $("modal");
+    this.modalKey = null;
+    this.cancelModal = null;
+    this.flipState = null;
+    this.selection = null;
+    this.pointer = null;
+    this.focusIndex = 52;
+    this.lastHistory = null;
+    this.currentTab = "moves";
+    this.hideToast = null;
+    this.players = ["topPlayer", "bottomPlayer"].map((id) => {
+      const element = $(id);
+      element.innerHTML = '<span class="avatar" aria-hidden="true"></span><div class="player-info"><span class="player-name"></span><div class="player-detail"><span class="player-color"></span><span class="takes"></span><span class="edge"></span></div></div><div class="clock" role="timer"></div>';
+      const parts = {};
+      for (const part of ["avatar", "player-name", "player-color", "takes", "edge", "clock"]) parts[part] = element.querySelector("." + part);
+      return {element, parts};
+    });
+    for (const element of document.querySelectorAll("[data-icon]")) element.insertAdjacentHTML("afterbegin", icon(element.dataset.icon));
+    $("brandMark").innerHTML = pieceSVG(core.KNIGHT);
+    this.modal.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.dismiss(this.modalKey, true);
+    });
+    this.setupBoard();
+    this.setupControls();
+    this.renderSound();
+  }
+
+  setupControls() {
+    const app = this.app;
+    document.addEventListener("pointerdown", () => app.sound.unlock(), {passive: true});
+    document.addEventListener("keydown", () => app.sound.unlock());
+    document.querySelectorAll("[data-mode]").forEach((element) => element.addEventListener("click", () => app.selectMode(element.dataset.mode)));
+    const actions = {
+      soundButton: () => { app.sound.toggle(); this.renderSound(); },
+      newGame: () => app.newGame(),
+      undo: () => app.undoClick(),
+      flip: () => { app.flipped = !app.flipped; this.render(); },
+      hint: () => app.hintClick(),
+      copyFen: () => this.copy(app.match.engine.fen(), "Đã copy FEN."),
+      loadFen: () => this.showFEN(),
+      offerDraw: () => app.offerDrawClick(),
+      claimDraw: () => this.showClaims(),
+      resign: () => app.resignClick(),
+      createRoom: () => app.openRoom("host"),
+      joinRoom: () => app.openRoom("guest"),
+      leaveRoom: () => app.net.close(),
+      copyCode: () => this.copy(app.net.code, "Đã copy mã phòng."),
+      copyInvite: () => this.copyInvite(),
+      movesTab: () => this.setTab("moves"),
+      chatTab: () => this.setTab("chat")
+    };
+    for (const [id, action] of Object.entries(actions)) $(id).addEventListener("click", action);
+    $("difficulty").addEventListener("change", () => app.updateLevel(Number($("difficulty").value)));
+    $("offlineTime").addEventListener("change", () => app.updateTime(Number($("offlineTime").value)));
+    $("roomInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") app.openRoom("guest");
+    });
+    $("chatForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (app.sendChat($("chatInput").value)) $("chatInput").value = "";
+    });
+    $("reactions").addEventListener("click", (event) => {
+      if (event.target.tagName === "BUTTON") app.sendChat(event.target.textContent);
+    });
+  }
+
+  setupBoard() {
+    this.squares = Array.from({length: 64}, (_, position) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "square";
+      tile.dataset.position = position;
+      tile.tabIndex = position === this.focusIndex ? 0 : -1;
+      this.board.append(tile);
+      return tile;
+    });
+    const tileFor = (target) => target?.closest(".square");
+    this.board.addEventListener("focusin", (event) => {
+      const tile = tileFor(event.target);
+      if (!tile) return;
+      this.squares[this.focusIndex].tabIndex = -1;
+      this.focusIndex = Number(tile.dataset.position);
+      tile.tabIndex = 0;
+    });
+    this.board.addEventListener("keydown", (event) => {
+      const offsets = {ArrowLeft: -1, ArrowRight: 1, ArrowUp: -8, ArrowDown: 8};
+      if (!(event.key in offsets)) return;
+      event.preventDefault();
+      const to = this.focusIndex + offsets[event.key];
+      if (to < 0 || to >= 64 || (Math.abs(offsets[event.key]) === 1 && (to >> 3) !== (this.focusIndex >> 3))) return;
+      this.squares[to].focus();
+    });
+    this.board.addEventListener("click", (event) => {
+      if (this.blockClick) { this.blockClick = false; return; }
+      const tile = tileFor(event.target);
+      if (tile) this.selectSquare(Number(tile.dataset.square));
+    });
+    this.board.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0 || !this.app.canPlay()) return;
+      const tile = tileFor(event.target);
+      if (!tile) return;
+      const from = Number(tile.dataset.square), engine = this.app.match.engine;
+      if (engine.board[from] * engine.turn <= 0) return;
+      this.pointer = {id: event.pointerId, from, tile, x: event.clientX, y: event.clientY, dragging: false};
+    });
+    window.addEventListener("pointermove", (event) => {
+      const pointer = this.pointer;
+      if (!pointer || pointer.id !== event.pointerId) return;
+      if (!pointer.dragging) {
+        if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) < 7) return;
+        if (!this.app.canPlay()) { this.cancelDrag(); return; }
+        pointer.dragging = true;
+        this.board.setPointerCapture(event.pointerId);
+        this.selection = pointer.from;
+        const ghost = $("ghost"), size = pointer.tile.clientWidth;
+        ghost.style.width = ghost.style.height = size + "px";
+        ghost.innerHTML = pieceSVG(this.app.match.engine.board[pointer.from]);
+        ghost.hidden = false;
+        this.renderBoard();
+      }
+      $("ghost").style.left = event.clientX + "px";
+      $("ghost").style.top = event.clientY + "px";
+    });
+    window.addEventListener("pointerup", (event) => {
+      const pointer = this.pointer;
+      if (!pointer || pointer.id !== event.pointerId) return;
+      this.cancelDrag();
+      if (!pointer.dragging) return;
+      this.blockClick = true;
+      setTimeout(() => { this.blockClick = false; }, 0);
+      const target = tileFor(document.elementFromPoint(event.clientX, event.clientY));
+      if (target && this.board.contains(target)) this.tryMove(Number(target.dataset.square));
+      else this.renderBoard();
+    });
+    window.addEventListener("pointercancel", (event) => {
+      if (this.pointer?.id === event.pointerId) { this.cancelDrag(); this.renderBoard(); }
+    });
+    window.addEventListener("blur", () => { if (this.pointer) { this.cancelDrag(); this.renderBoard(); } });
+    this.board.addEventListener("contextmenu", (event) => event.preventDefault());
+  }
+
+  cancelDrag() {
+    this.pointer = null;
+    $("ghost").hidden = true;
+  }
+
+  clearSelection() {
+    this.selection = null;
+    this.cancelDrag();
+    this.dismiss("promotion");
+    this.dismiss("claim");
+  }
+
+  selectSquare(square) {
+    if (!this.app.canPlay()) return;
+    if (this.selection === square) { this.selection = null; this.renderBoard(); return; }
+    if (this.tryMove(square)) return;
+    const engine = this.app.match.engine;
+    this.selection = engine.board[square] * engine.turn > 0 ? square : null;
+    this.renderBoard();
+  }
+
+  tryMove(to) {
+    if (!this.app.canPlay() || this.selection === null) { this.renderBoard(); return false; }
+    const candidates = this.app.match.legal.filter((move) => move.from === this.selection && move.to === to);
+    if (!candidates.length) { this.renderBoard(); return false; }
+    if (candidates[0].promotion) this.showPromotion(candidates);
+    else this.app.submitMove(candidates[0]);
+    return true;
+  }
+
+  renderBoard() {
+    const {match, flipped, suggested} = this.app, {engine} = match;
+    const last = engine.history.at(-1)?.move;
+    const king = engine.inCheck() ? engine.kings[engine.turn] : -1;
+    const canPlay = this.app.canPlay();
+    const targets = new Map();
+    if (canPlay && this.selection !== null) {
+      for (const move of match.legal) if (move.from === this.selection) targets.set(move.to, move.captured);
+    }
+    this.squares.forEach((tile, i) => {
+      const sq = core.SQUARES[flipped ? 63 - i : i], piece = engine.board[sq], name = core.squareName(sq);
+      const visualRow = i >> 3, visualFile = i & 7;
+      tile.dataset.square = sq;
+      tile.classList.toggle("dark", !!((visualRow + visualFile) & 1));
+      tile.classList.toggle("last", last?.from === sq || last?.to === sq);
+      tile.classList.toggle("hint", suggested?.from === sq || suggested?.to === sq);
+      tile.classList.toggle("check", king === sq);
+      tile.classList.toggle("selected", canPlay && this.selection === sq);
+      tile.classList.toggle("playable", canPlay && engine.turn * piece > 0);
+      tile.classList.toggle("target", targets.has(sq) && !targets.get(sq));
+      tile.classList.toggle("capture", targets.has(sq) && !!targets.get(sq));
+      tile.classList.toggle("dragging", !!this.pointer?.dragging && this.pointer.from === sq);
+      const label = name + (piece ? ", " + PIECE_NAMES[Math.abs(piece)] + " " + sideText(Math.sign(piece)) : ", ô trống");
+      if (tile.getAttribute("aria-label") !== label || this.flipState !== flipped) {
+        tile.setAttribute("aria-label", label);
+        tile.innerHTML = pieceSVG(piece) + (visualFile === 0 ? '<span aria-hidden="true" class="coord rank">' + name[1] + '</span>' : "") +
+          (visualRow === 7 ? '<span aria-hidden="true" class="coord file">' + name[0] + "</span>" : "");
+      }
+    });
+    this.flipState = flipped;
+  }
+
+  render() {
+    const {app} = this, {match, mode, offer, net} = app;
+    const online = mode === "online", bot = mode === "bot", engine = match.engine;
+    $("modeTitle").textContent = MODE[mode][0];
+    $("modeSubtitle").textContent = MODE[mode][1];
+    document.querySelectorAll("[data-mode]").forEach((element) => element.setAttribute("aria-pressed", String(element.dataset.mode === mode)));
+    const badge = $("connectionBadge");
+    const phase = net.phase;
+    const connectionLabels = {
+      idle: "Chưa vào phòng", waiting: "Đang chờ bạn bè", connecting: "Đang kết nối", handshake: "Đang kết nối",
+      connected: "Đã kết nối", left: "Đối thủ đã thoát phòng", error: "Lỗi kết nối"
+    };
+    badge.classList.toggle("wait", online && ["connecting", "handshake", "waiting"].includes(phase));
+    badge.classList.toggle("off", online && ["idle", "left", "error"].includes(phase));
+    $("connectionText").textContent = online ? connectionLabels[phase] : "Chơi ngoại tuyến";
+    $("roomCard").hidden = !online;
+    $("roomSetup").hidden = !!net.role;
+    $("leaveRoom").hidden = !net.role;
+    $("roomInfo").hidden = !net.code || !["waiting", "handshake", "connected"].includes(phase);
+    $("roomCode").textContent = net.code;
+    $("offlineSetup").hidden = online;
+    $("difficultyField").hidden = !bot;
+    $("newGame").hidden = online && !net.connected;
+    $("newGame").disabled = online && (!match.result || !!offer);
+    $("newGame").lastChild.textContent = online ? "Tái đấu" : "Ván mới";
+    $("undo").disabled = !engine.history.length || (online && (!net.connected || !!offer));
+    $("undo").lastChild.textContent = online ? "Xin đi lại" : "Đi lại";
+    $("evalBar").hidden = online;
+    $("hint").hidden = online;
+    $("hint").disabled = !app.canPlay() || app.hinting;
+    $("loadFen").hidden = online;
+    $("flip").hidden = online;
+    $("copyFen").disabled = online && !app.onlineStarted;
+    $("offerDraw").hidden = bot;
+    $("offerDraw").disabled = !!match.result || (online && (!net.connected || !!offer));
+    $("resign").disabled = !!match.result || (online && (!net.connected || app.syncing));
+    $("claimDraw").hidden = !app.canPlay() || (!match.claims.now && !match.claims.moves.length);
+    $("chatTab").hidden = !online || !app.onlineStarted;
+    $("chatInput").disabled = !net.connected;
+    $("chatForm").querySelector("button").disabled = !net.connected;
+    for (const item of $("reactions").children) item.disabled = !net.connected;
+    if ($("chatTab").hidden && this.currentTab === "chat") this.setTab("moves");
+    $("statusText").textContent = app.status();
+    this.renderBoard();
+    this.renderPlayers();
+    this.renderMoves();
+    if (!online) this.renderEvaluation();
+    this.maybeShowOffer();
+  }
+
+  renderPlayers() {
+    const {app} = this, {match} = app, {engine} = match;
+    const captures = {1: [], "-1": []};
+    const totals = {1: 0, "-1": 0}, points = [0, 1, 3, 3, 5, 9, 0];
+    for (const square of core.SQUARES) {
+      const piece = engine.board[square];
+      if (piece) totals[Math.sign(piece)] += points[Math.abs(piece)];
+    }
+    for (const {side, move} of engine.history) if (move.captured) captures[side].push(move.captured);
+    this.players.forEach((player, i) => {
+      const side = (i === 0) === app.flipped ? core.WHITE : core.BLACK;
+      player.side = side;
+      const {parts} = player, profile = app.profile(side), taken = captures[side];
+      parts.avatar.innerHTML = icon(profile.icon);
+      parts["player-name"].textContent = profile.name;
+      parts["player-color"].textContent = sideText(side);
+      parts.takes.innerHTML = taken.sort((a, b) => Math.abs(a) - Math.abs(b)).map(pieceSVG).join("");
+      parts.takes.setAttribute("aria-label", taken.length ? "Đã ăn " + taken.map((piece) => PIECE_NAMES[Math.abs(piece)]).join(", ") : "");
+      const advantage = totals[side] - totals[-side];
+      parts.edge.textContent = advantage > 0 ? "+" + advantage : "";
+      parts.clock.setAttribute("aria-label", "Đồng hồ " + sideText(side));
+    });
+    this.renderClocks();
+  }
+
+  renderClocks() {
+    const {match} = this.app, times = match.times();
+    for (const {element, parts, side} of this.players) {
+      const active = match.running && !match.result && side === match.engine.turn;
+      const total = Math.ceil(times[match.index(side)] / 1000);
+      const display = match.minutes ? String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0") : "∞";
+      if (parts.clock.textContent !== display) parts.clock.textContent = display;
+      element.classList.toggle("active", active);
+      parts.clock.classList.toggle("low", !!match.minutes && total <= 20);
+    }
+  }
+
+  renderMoves() {
+    const engine = this.app.match.engine, history = engine.history;
+    const last = history.at(-1);
+    if (this.lastHistory === engine && this.lastRecord === last) return;
+    this.lastHistory = engine;
+    this.lastRecord = last;
+    const list = $("moveList");
+    $("plyCount").textContent = history.length + " nước";
+    list.replaceChildren();
+    if (!history.length) {
+      list.innerHTML = '<div class="empty">' + icon("list") + "<span>Chưa có nước đi</span></div>";
+      return;
+    }
+    let row, number;
+    for (const record of history) {
+      if (record.number !== number) {
+        number = record.number;
+        row = document.createElement("div");
+        row.className = "move-row";
+        row.innerHTML = '<span class="move-no"></span><span></span><span></span>';
+        row.children[0].textContent = number + ".";
+        if (record.side === core.BLACK) row.children[1].textContent = "…";
+        list.append(row);
+      }
+      const cell = row.children[record.side === core.WHITE ? 1 : 2];
+      cell.textContent = record.san;
+      cell.classList.toggle("last-san", record === last);
+    }
+    list.scrollTop = list.scrollHeight;
+  }
+
+  renderEvaluation() {
+    const {match, flipped} = this.app;
+    const score = core.evaluate(match.engine) / 100;
+    const white = match.result ? (match.result.winner ? (match.result.winner > 0 ? 100 : 0) : 50) : 50 + 48 * Math.tanh(score / 6);
+    const fill = $("evalFill");
+    fill.style.height = white + "%";
+    fill.style.top = flipped ? "0" : "auto";
+    fill.style.bottom = flipped ? "auto" : "0";
+    $("evalLabel").textContent = match.result ? (match.result.winner ? sideText(match.result.winner) : "½–½")
+      : (score > .04 ? "+" : "") + (Math.abs(score) < .05 ? "0.0" : score.toFixed(1));
+    $("evalBar").setAttribute("aria-label", "Đánh giá thế cờ " + $("evalLabel").textContent);
+  }
+
+  renderSound() {
+    const enabled = this.app.sound.enabled, label = enabled ? "Tắt âm thanh" : "Bật âm thanh";
+    const control = $("soundButton");
+    control.innerHTML = icon(enabled ? "sound" : "mute");
+    control.setAttribute("aria-pressed", String(enabled));
+    control.setAttribute("aria-label", label);
+    control.title = label;
+  }
+
+  setTab(tab) {
+    this.currentTab = tab;
+    for (const key of ["moves", "chat"]) {
+      $(key + "Panel").hidden = key !== tab;
+      $(key + "Tab").classList.toggle("active", key === tab);
+      $(key + "Tab").setAttribute("aria-pressed", String(key === tab));
+    }
+    $("plyCount").hidden = tab !== "moves";
+    if (tab === "chat") $("chatLog").scrollTop = $("chatLog").scrollHeight;
+  }
+
+  chat(name, text) {
+    const line = document.createElement("p"), author = document.createElement("strong"), log = $("chatLog");
+    author.textContent = name + " · ";
+    line.append(author, text);
+    log.append(line);
+    if (log.children.length > 200) log.firstElementChild.remove();
+    log.scrollTop = log.scrollHeight;
+  }
+
+  toast(message) {
+    const toast = $("toast");
+    clearTimeout(this.hideToast);
+    toast.textContent = message;
+    toast.hidden = false;
+    this.hideToast = setTimeout(() => { toast.hidden = true; }, 3600);
+  }
+
+  async copy(value, success) {
+    try {
+      await navigator.clipboard.writeText(value);
+      this.toast(success);
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = value;
+      field.readOnly = true;
+      field.rows = 3;
+      field.className = "fen-input";
+      field.setAttribute("aria-label", "Nội dung để sao chép");
+      if (this.show("copy", "Sao chép nội dung", [field], [button("Đóng", () => this.dismiss("copy"), true)])) field.select();
+    }
+  }
+
+  copyInvite() {
+    const url = new URL(location.href);
+    url.searchParams.set("room", this.app.net.code);
+    url.hash = "";
+    this.copy(url.href, url.protocol === "file:" ? "Đã copy link tệp. Bạn bè có thể mở bản của họ và nhập mã phòng." : "Đã copy link mời.");
+  }
+
+  show(key, title, content, actions, cancel = null) {
+    if (this.modal.open) return false;
+    this.modalKey = key;
+    this.cancelModal = cancel;
+    $("dialogTitle").textContent = title;
+    $("dialogBody").replaceChildren(...content.map((item) => {
+      if (typeof item !== "string") return item;
+      const paragraph = document.createElement("p");
+      paragraph.textContent = item;
+      return paragraph;
+    }));
+    $("dialogActions").replaceChildren(...actions);
+    this.modal.showModal();
+    return true;
+  }
+
+  dismiss(key, cancelled = false) {
+    if (!this.modal.open || this.modalKey !== key) return;
+    const handler = this.cancelModal;
+    this.modalKey = this.cancelModal = null;
+    this.modal.close();
+    if (cancelled) handler?.();
+    queueMicrotask(() => this.maybeShowOffer());
+  }
+
+  confirm(key, title, message, action, accept = "Xác nhận") {
+    this.show(key, title, [message], [
+      button("Hủy", () => this.dismiss(key)),
+      button(accept, () => { this.dismiss(key); action(); }, true)
+    ]);
+  }
+
+  showPromotion(candidates) {
+    const options = document.createElement("div");
+    options.className = "promotions";
+    for (const move of candidates) {
+      const choice = button(PIECE_NAMES[move.promotion], () => {
+        this.dismiss("promotion");
+        this.app.submitMove(move);
+      });
+      choice.setAttribute("aria-label", PIECE_NAMES[move.promotion]);
+      choice.title = PIECE_NAMES[move.promotion];
+      choice.innerHTML = pieceSVG(move.promotion * this.app.match.engine.turn);
+      options.append(choice);
+    }
+    this.show("promotion", "Phong cấp tốt", [options], [button("Hủy", () => this.dismiss("promotion"))]);
+  }
+
+  showFEN() {
+    const field = document.createElement("textarea"), error = document.createElement("div");
+    field.className = "fen-input";
+    field.setAttribute("aria-label", "Chuỗi FEN");
+    field.placeholder = "Dán chuỗi FEN";
+    field.rows = 3;
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    this.show("fen", "Nạp thế cờ từ FEN", [field, error], [
+      button("Hủy", () => this.dismiss("fen")),
+      button("Nạp thế cờ", () => {
+        try { this.app.loadFEN(field.value); this.dismiss("fen"); }
+        catch (failure) { error.textContent = failure.message; }
+      }, true)
+    ]);
+  }
+
+  showClaims() {
+    const {match} = this.app, {now, moves} = match.claims;
+    if (!this.app.canPlay()) return;
+    if (now) {
+      this.confirm("claim", "Yêu cầu hòa theo luật", RESULT_TEXT[now.reason], () => this.app.claimClick(null));
+      return;
+    }
+    if (!moves.length) return;
+    const field = document.createElement("select");
+    field.setAttribute("aria-label", "Nước đi dự định");
+    for (const [index, move] of moves.entries()) {
+      const option = document.createElement("option");
+      option.value = index;
+      option.textContent = match.engine.sanBase(move, match.legal);
+      field.append(option);
+    }
+    this.show("claim", "Yêu cầu hòa theo luật", ["Chọn nước đi dự định để xác lập điều kiện hòa.", field], [
+      button("Hủy", () => this.dismiss("claim")),
+      button("Yêu cầu hòa", () => { this.dismiss("claim"); this.app.claimClick(moves[Number(field.value)]); }, true)
+    ]);
+  }
+
+  maybeShowOffer() {
+    const {app} = this, {offer} = app;
+    if (!offer || offer.by === app.myColor || offer.id === app.respondedOffer || !app.net.connected) return;
+    const actions = {draw: ["Xin hòa", "Đối thủ đề nghị hòa."], undo: ["Xin đi lại", "Đối thủ muốn quay lại một nước."],
+      rematch: ["Mời tái đấu", "Đối thủ muốn bắt đầu ván mới và đổi màu quân."]};
+    const [title, message] = actions[offer.kind];
+    const key = "offer:" + offer.id;
+    const respond = (yes) => { app.answerOffer(offer.id, yes); this.dismiss(key); };
+    this.show(key, title, [message], [
+      button("Từ chối", () => respond(false)),
+      button("Đồng ý", () => respond(true), true)
+    ], () => app.answerOffer(offer.id, false));
+  }
+}
+</script>
+<script>
+"use strict";
+
+const OFFER_KINDS = new Set(["draw", "undo", "rematch"]);
+const safeMove = (packet) => packet && typeof packet === "object" &&
+  core.squareIndex(packet.from) >= 0 && core.squareIndex(packet.to) >= 0 &&
+  (packet.promotion == null || ["q", "r", "b", "n"].includes(packet.promotion));
+const validClocks = (packet, minutes) => [packet.whiteTime, packet.blackTime]
+  .every((time) => Number.isSafeInteger(time) && time >= 0 && time <= minutes * 60000);
+
+class ChessApp {
+  constructor() {
+    this.mode = "bot";
+    this.match = new ChessMatch();
+    this.sound = new SoundManager();
+    this.ai = new AIWorker();
+    this.level = 2;
+    this.offlineMinutes = 0;
+    this.flipped = false;
+    this.thinking = this.hinting = false;
+    this.work = 0;
+    this.suggested = null;
+    this.resetRoom();
+    this.net = new MultiplayerManager({
+      open: () => { if (this.net.role === "guest") this.net.send({type: "HELLO", version: 1, name: this.nickname}); },
+      data: (packet) => this.receive(packet),
+      status: (phase, detail) => this.connectionChanged(phase, detail)
+    });
+    this.ui = new UIRenderer(this);
+    const invite = new URL(location.href).searchParams.get("room")?.trim().toUpperCase();
+    if (invite && ROOM_CODE.test(invite)) {
+      $("roomInput").value = invite;
+      this.switchMode("online");
+    }
+    this.ui.render();
+    setInterval(() => this.tick(), 100);
+    window.addEventListener("pagehide", () => this.net.close());
+  }
+
+  resetRoom() {
+    this.onlineStarted = false;
+    this.myColor = core.WHITE;
+    this.hostColor = core.WHITE;
+    this.gameId = 0;
+    this.revision = 0;
+    this.nextOffer = 0;
+    this.respondedOffer = null;
+    this.offer = null;
+    this.pendingMove = false;
+    this.syncing = false;
+    this.syncAt = 0;
+    this.broadcastAt = 0;
+    this.lastIncomingChat = -Infinity;
+    this.lastSentChat = -Infinity;
+    this.hostName = "Chủ phòng";
+    this.guestName = "Khách";
+  }
+
+  profile(side) {
+    if (this.mode === "bot") return side === core.WHITE ? {name: "Bạn", icon: "user"} : {name: "Bot AI", icon: "bot"};
+    if (this.mode === "local") return {name: "Người chơi " + sideText(side), icon: "user"};
+    if (!this.onlineStarted) return {name: "Quân " + sideText(side), icon: "user"};
+    return {name: side === this.hostColor ? this.hostName : this.guestName, icon: side === this.myColor ? "user" : "users"};
+  }
+
+  canPlay() {
+    if (this.match.result || !this.match.running) return false;
+    const turn = this.match.engine.turn;
+    if (this.mode === "bot") return turn === core.WHITE && !this.thinking;
+    if (this.mode === "online") return this.net.connected && this.onlineStarted && this.myColor === turn && !this.pendingMove && !this.syncing;
+    return true;
+  }
+
+  status() {
+    const {match, net} = this;
+    if (match.result) {
+      const {reason, winner} = match.result;
+      return RESULT_TEXT[reason] + (winner ? " · " + sideText(winner) + " thắng" : "");
+    }
+    if (this.mode === "online") {
+      if (this.syncing) return "Đang đồng bộ bàn cờ…";
+      if (!net.connected) {
+        if (net.phase === "waiting") return "Đang chờ đối thủ vào phòng";
+        if (net.phase === "connecting" || net.phase === "handshake") return "Đang thiết lập kết nối…";
+        if (net.phase === "left") return "Ván đấu đã dừng";
+        return "Tạo phòng hoặc nhập mã để bắt đầu";
+      }
+      if (this.pendingMove) return "Đang xác nhận nước đi…";
+    }
+    if (this.thinking) return "AI đang suy nghĩ…";
+    if (this.hinting) return "Đang tìm nước gợi ý…";
+    const turn = match.engine.turn;
+    return "Lượt quân " + sideText(turn) + (match.engine.inCheck() ? " · Đang bị chiếu" : "");
+  }
+
+  selectMode(mode) {
+    if (mode === this.mode || !Object.hasOwn(MODE, mode)) return;
+    if (this.mode === "online" && this.net.connected) {
+      this.ui.confirm("leave", "Rời phòng chơi?", "Ván online sẽ dừng khi bạn rời phòng.", () => this.switchMode(mode), "Rời phòng");
+    } else {
+      this.switchMode(mode);
+    }
+  }
+
+  switchMode(mode) {
+    this.net.close(false);
+    this.resetRoom();
+    this.mode = mode;
+    this.flipped = false;
+    this.ui.setTab("moves");
+    $("chatLog").replaceChildren();
+    this.replaceMatch(new ChessMatch(mode === "online" ? 0 : this.offlineMinutes, core.START, mode !== "online"));
+  }
+
+  cancelWork() {
+    this.work++;
+    this.ai.cancel();
+    this.thinking = this.hinting = false;
+    this.suggested = null;
+  }
+
+  replaceMatch(match) {
+    this.cancelWork();
+    this.match = match;
+    this.ui.clearSelection();
+    this.ui.render();
+    this.scheduleBot();
+  }
+
+  newGame() {
+    if (this.mode === "online") { this.requestOffer("rematch"); return; }
+    this.replaceMatch(new ChessMatch(this.offlineMinutes));
+  }
+
+  updateLevel(level) {
+    if (![1, 2, 3, 4].includes(level)) return;
+    this.level = level;
+    this.cancelWork();
+    this.ui.render();
+    this.scheduleBot();
+  }
+
+  updateTime(minutes) {
+    if (!TIMER_OPTIONS.has(minutes)) return;
+    this.offlineMinutes = minutes;
+    if (!this.match.engine.history.length && !this.match.result) this.replaceMatch(new ChessMatch(minutes, this.match.engine.fen()));
+    else this.ui.toast("Đồng hồ mới sẽ áp dụng từ ván tiếp theo.");
+  }
+
+  loadFEN(fen) {
+    if (this.mode !== "online") this.replaceMatch(new ChessMatch(this.offlineMinutes, fen));
+  }
+
+  moveSound(record) {
+    const move = record.move;
+    const cue = this.match.result ? "end" : move.promotion ? "promote" : move.rook !== undefined ? "castle"
+      : this.match.engine.inCheck() ? "check" : move.captured ? "capture" : "move";
+    this.sound.play(cue);
+  }
+
+  submitMove(input) {
+    if (!this.canPlay() || this.checkTimeout()) return;
+    const move = this.match.engine.resolve(input, this.match.legal);
+    if (!move) return;
+    if (this.mode !== "online") { this.playOffline(move); return; }
+    if (this.net.role === "host") { this.commitOnline(move); return; }
+    this.pendingMove = true;
+    this.pendingAt = performance.now();
+    const sent = this.net.send({
+      type: "MOVE", game: this.gameId, revision: this.revision, ...core.moveWire(move),
+      fen: this.match.project(move), ...this.match.clockPacket()
+    });
+    if (!sent) this.pendingMove = false;
+    this.ui.clearSelection();
+    this.ui.render();
+  }
+
+  playOffline(move) {
+    this.cancelWork();
+    const record = this.match.play(move);
+    if (record) this.moveSound(record);
+    this.ui.clearSelection();
+    this.ui.render();
+    this.scheduleBot();
+  }
+
+  async scheduleBot() {
+    if (this.mode !== "bot" || this.match.engine.turn !== core.BLACK || this.match.result || this.thinking) return;
+    const job = ++this.work;
+    this.thinking = true;
+    this.ui.render();
+    const time = this.match.times()[1];
+    const budget = this.match.minutes ? Math.max(15, Math.min(2400, time - 75)) : 2400;
+    let answer;
+    try {
+      answer = await this.ai.find(this.match.engine, this.level, {book: true, random: true, allowClaim: true, budget});
+    } catch {
+      if (job !== this.work) return;
+      this.ui.toast("Bot không khởi động được Web Worker và sẽ đi một nước hợp lệ.");
+      answer = {move: this.match.legal[0]};
+    }
+    if (job !== this.work) return;
+    this.thinking = false;
+    if (this.checkTimeout()) return;
+    if (answer?.claim && this.match.claim(answer.move)) { this.afterFinish(); return; }
+    if (answer?.move) this.playOffline(answer.move);
+    else this.ui.render();
+  }
+
+  async hintClick() {
+    if (this.mode === "online" || !this.canPlay() || this.hinting) return;
+    const job = ++this.work;
+    this.hinting = true;
+    this.ui.render();
+    try {
+      const answer = await this.ai.find(this.match.engine, 3, {budget: 1250});
+      if (job !== this.work || !answer?.move) return;
+      const move = this.match.engine.resolve(answer.move, this.match.legal);
+      if (move) {
+        this.suggested = move;
+        this.ui.toast("Gợi ý " + this.match.engine.sanBase(move, this.match.legal));
+      }
+    } catch {
+      if (job === this.work) this.ui.toast("Không khởi động được công cụ gợi ý.");
+    } finally {
+      if (job === this.work) { this.hinting = false; this.ui.render(); }
+    }
+  }
+
+  undoClick() {
+    if (this.mode === "online") { this.requestOffer("undo"); return; }
+    if (!this.match.engine.history.length) return;
+    this.cancelWork();
+    const count = this.mode === "bot" && this.match.engine.turn === core.WHITE ? 2 : 1;
+    this.match.undo(count);
+    this.ui.clearSelection();
+    this.ui.render();
+    this.scheduleBot();
+  }
+
+  offerDrawClick() {
+    if (this.match.result) return;
+    if (this.mode === "online") { this.requestOffer("draw"); return; }
+    if (this.mode === "local") {
+      this.ui.confirm("localDraw", "Hòa thỏa thuận?", "Người chơi còn lại có đồng ý hòa không?", () => {
+        if (!this.checkTimeout() && this.match.finish(core.makeResult("agreement"))) this.afterFinish();
+      }, "Đồng ý hòa");
+    }
+  }
+
+  resignClick() {
+    if (this.match.result || (this.mode === "online" && !this.net.connected)) return;
+    const side = this.mode === "online" ? this.myColor : this.mode === "bot" ? core.WHITE : this.match.engine.turn;
+    this.ui.confirm("resign", "Đầu hàng?", "Quân " + sideText(side) + " sẽ đầu hàng.", () => {
+      if (this.mode === "online" && this.net.role === "guest") {
+        this.net.send({type: "RESIGN", game: this.gameId});
+      } else if (!this.checkTimeout() && this.match.resign(side)) {
+        this.afterFinish();
+      }
+    }, "Đầu hàng");
+  }
+
+  claimClick(move) {
+    if (!this.canPlay() || this.checkTimeout()) return;
+    if (this.mode === "online" && this.net.role === "guest") {
+      this.net.send({type: "CLAIM", game: this.gameId, revision: this.revision, move: move ? core.moveWire(move) : null});
+    } else if (this.match.claim(move)) this.afterFinish();
+  }
+
+  checkTimeout() {
+    if (this.mode === "online" && this.net.role !== "host") return false;
+    if (!this.match.timeout()) return false;
+    this.afterFinish();
+    return true;
+  }
+
+  afterFinish() {
+    this.cancelWork();
+    this.setOffer(null);
+    this.ui.clearSelection();
+    this.ui.dismiss("resign");
+    this.ui.dismiss("localDraw");
+    if (this.mode === "online" && this.net.role === "host" && this.onlineStarted) {
+      this.revision++;
+      this.sendState();
+    }
+    this.sound.play("end");
+    this.ui.render();
+  }
+
+  tick() {
+    this.checkTimeout();
+    this.ui.renderClocks();
+    if (this.mode !== "online" || !this.net.connected || !this.onlineStarted) return;
+    const now = performance.now();
+    if (this.net.role === "host" && this.match.running && this.match.minutes && now - this.broadcastAt >= 2000) {
+      this.broadcastAt = now;
+      this.net.send({type: "CLOCK", game: this.gameId, revision: this.revision, ...this.match.clockPacket()});
+    } else if (this.net.role === "guest" && this.pendingMove && now - this.pendingAt >= 4500) {
+      this.requestSync();
+    } else if (this.net.role === "guest" && this.syncing && now - this.syncAt >= 7500) {
+      this.net.fail("Không nhận được bản đồng bộ từ chủ phòng.", "left");
+    }
+  }
+
+  openRoom(role) {
+    if (this.mode !== "online" || this.net.role) return;
+    let code = $("roomInput").value.trim().toUpperCase();
+    if (/^\d{4}$/.test(code)) code = "CHESS-" + code;
+    if (role === "guest" && !ROOM_CODE.test(code)) { this.ui.toast("Nhập mã phòng dạng CHESS-4829."); $("roomInput").focus(); return; }
+    this.resetRoom();
+    this.nickname = cleanName($("nickname").value || (role === "host" ? "Chủ phòng" : "Khách"));
+    const choice = $("hostColor").value;
+    this.hostColor = choice === "b" || (choice === "random" && Math.random() < .5) ? core.BLACK : core.WHITE;
+    this.onlineMinutes = Number($("onlineTime").value);
+    this.flipped = false;
+    $("chatLog").replaceChildren();
+    this.replaceMatch(new ChessMatch(0, core.START, false));
+    this.net.open(role, code);
+  }
+
+  connectionChanged(phase, detail) {
+    if (this.mode !== "online") return;
+    if (phase === "idle") {
+      this.setOffer(null);
+      this.resetRoom();
+      this.flipped = false;
+      this.replaceMatch(new ChessMatch(0, core.START, false));
+      $("chatLog").replaceChildren();
+    } else if (phase === "left" || phase === "error") {
+      this.match.readClocks(this.match.clockPacket(), false);
+      this.pendingMove = this.syncing = false;
+      this.setOffer(null);
+      this.ui.clearSelection();
+      if (detail) this.ui.toast(detail);
+    }
+    this.ui.render();
+  }
+
+  startOnline(guestName, rematch = false) {
+    if (rematch) this.hostColor = -this.hostColor;
+    else {
+      this.hostName = this.nickname;
+      this.guestName = cleanName(guestName);
+    }
+    this.setOffer(null);
+    this.onlineStarted = true;
+    this.gameId++;
+    this.revision++;
+    this.myColor = this.hostColor;
+    this.flipped = this.myColor === core.BLACK;
+    this.match = new ChessMatch(this.onlineMinutes);
+    this.ui.clearSelection();
+    if (!this.net.connected) this.net.ready();
+    this.sendState();
+    this.ui.render();
+  }
+
+  sendState() {
+    const {match} = this;
+    this.net.send({
+      type: "STATE", version: 1, game: this.gameId, revision: this.revision,
+      hostColor: this.hostColor, host: this.hostName, guest: this.guestName, minutes: match.minutes,
+      initial: match.engine.initialFEN, moves: match.engine.history.map(({move}) => core.moveWire(move)),
+      fen: match.engine.fen(), ...match.clockPacket(), running: match.running,
+      result: match.result, offer: this.offer
+    });
+  }
+
+  acceptState(packet) {
+    if (packet.version !== 1 || !Number.isSafeInteger(packet.game) || packet.game < 1 || packet.game < this.gameId ||
+        !Number.isSafeInteger(packet.revision) || packet.revision < 1 || packet.revision < this.revision ||
+        !validColor(packet.hostColor) || !TIMER_OPTIONS.has(packet.minutes) || !validClocks(packet, packet.minutes) ||
+        !Array.isArray(packet.moves) || packet.moves.length > 20000 || packet.initial !== core.START ||
+        typeof packet.running !== "boolean" || (packet.result !== null &&
+        (!packet.result || !Object.hasOwn(RESULT_TEXT, packet.result.reason) || ![0, 1, -1].includes(packet.result.winner)))) return;
+    const match = new ChessMatch(packet.minutes, packet.initial);
+    for (const input of packet.moves) {
+      if (!safeMove(input) || !match.play(input)) return;
+    }
+    if (match.engine.fen() !== packet.fen || packet.running === !!packet.result) return;
+    if (match.result && (match.result.reason !== packet.result?.reason || match.result.winner !== packet.result?.winner)) return;
+    const oldResult = this.match.result, previousGame = this.gameId, oldLength = this.match.engine.history.length;
+    if (packet.result) match.result = core.makeResult(packet.result.reason, packet.result.winner);
+    match.readClocks(packet, packet.running);
+    this.onlineStarted = true;
+    this.gameId = packet.game;
+    this.revision = packet.revision;
+    this.hostColor = packet.hostColor;
+    this.hostName = cleanName(packet.host);
+    this.guestName = cleanName(packet.guest);
+    this.myColor = -packet.hostColor;
+    this.flipped = this.myColor === core.BLACK;
+    this.match = match;
+    this.pendingMove = this.syncing = false;
+    this.setOffer(this.validateOffer(packet.offer));
+    this.ui.clearSelection();
+    if (match.result) this.ui.dismiss("resign");
+    if (!this.net.connected) this.net.ready();
+    if (oldResult === null && match.result) this.sound.play("end");
+    if (previousGame && previousGame !== this.gameId) this.ui.toast("Tái đấu · Hai người đã đổi màu quân.");
+    else if (previousGame && oldLength > packet.moves.length) this.ui.toast("Đã lùi một nước.");
+    this.ui.render();
+  }
+
+  requestSync() {
+    if (this.syncing || !this.net.connected) return;
+    this.syncing = true;
+    this.pendingMove = false;
+    this.syncAt = performance.now();
+    this.net.send({type: "SYNC_REQUEST", game: this.gameId, revision: this.revision});
+    this.ui.clearSelection();
+    this.ui.render();
+  }
+
+  commitOnline(move) {
+    const side = this.match.engine.turn;
+    const record = this.match.play(move);
+    if (!record) return;
+    if (this.match.result || (this.offer && (this.offer.kind !== "draw" || this.offer.by !== side))) this.setOffer(null);
+    this.revision++;
+    this.broadcastAt = performance.now();
+    this.net.send({
+      type: "MOVE", game: this.gameId, revision: this.revision, ...core.moveWire(move),
+      fen: this.match.engine.fen(), ...this.match.clockPacket(), offer: this.offer
+    });
+    this.moveSound(record);
+    this.ui.clearSelection();
+    this.ui.render();
+  }
+
+  acceptMove(packet) {
+    if (packet.game === this.gameId && packet.revision <= this.revision) return;
+    if (packet.game !== this.gameId || packet.revision !== this.revision + 1 ||
+        !safeMove(packet) || !validClocks(packet, this.match.minutes)) { this.requestSync(); return; }
+    const move = this.match.engine.resolve(packet, this.match.legal);
+    if (!move || this.match.project(move) !== packet.fen) { this.requestSync(); return; }
+    const record = this.match.play(move);
+    if (!record) { this.requestSync(); return; }
+    this.match.readClocks(packet, !this.match.result);
+    this.revision = packet.revision;
+    this.pendingMove = this.syncing = false;
+    this.setOffer(this.validateOffer(packet.offer));
+    this.moveSound(record);
+    this.ui.clearSelection();
+    this.ui.render();
+  }
+
+  offerAllowed(kind) {
+    if (!this.net.connected || !this.onlineStarted || !OFFER_KINDS.has(kind) || this.syncing || this.offer) return false;
+    if (kind === "rematch") return !!this.match.result;
+    if (kind === "undo") return this.match.engine.history.length > 0;
+    return !this.match.result;
+  }
+
+  validateOffer(value) {
+    if (!value || !Number.isSafeInteger(value.id) || value.id < 1 || value.game !== this.gameId ||
+        !validColor(value.by) || !OFFER_KINDS.has(value.kind)) return null;
+    return {id: value.id, game: value.game, by: value.by, kind: value.kind};
+  }
+
+  setOffer(offer) {
+    const old = this.offer;
+    this.offer = offer;
+    if (old?.id !== offer?.id && old) this.ui.dismiss("offer:" + old.id);
+  }
+
+  requestOffer(kind) {
+    if (!this.offerAllowed(kind) || this.checkTimeout()) return;
+    if (this.net.role === "host") this.createOffer(kind, this.myColor);
+    else this.net.send({type: "REQUEST", kind, game: this.gameId, revision: this.revision});
+  }
+
+  createOffer(kind, by) {
+    if (!this.offerAllowed(kind)) return;
+    this.setOffer({id: ++this.nextOffer, game: this.gameId, by, kind});
+    this.net.send({type: "OFFER", game: this.gameId, revision: this.revision, offer: this.offer});
+    if (by === this.myColor) this.ui.toast("Đã gửi lời đề nghị.");
+    this.ui.render();
+  }
+
+  answerOffer(id, accepted) {
+    if (!this.net.connected || this.offer?.id !== id || this.offer.by === this.myColor) return;
+    this.respondedOffer = id;
+    if (this.net.role === "host") this.resolveOffer(id, accepted, this.myColor);
+    else this.net.send({type: "REPLY", game: this.gameId, id, accepted});
+  }
+
+  resolveOffer(id, accepted, by) {
+    const offer = this.offer;
+    if (!offer || offer.id !== id || offer.by === by || typeof accepted !== "boolean") return;
+    if (this.checkTimeout()) return;
+    this.setOffer(null);
+    if (!accepted) {
+      this.net.send({type: "OFFER_END", game: this.gameId, id, by});
+      if (offer.by === this.myColor) this.ui.toast("Đối thủ đã từ chối.");
+      this.ui.render();
+      return;
+    }
+    if (offer.kind === "draw" && this.match.finish(core.makeResult("agreement"))) {
+      this.afterFinish();
+    } else if (offer.kind === "undo" && this.match.undo()) {
+      this.revision++;
+      this.ui.clearSelection();
+      this.sendState();
+      this.ui.toast("Đã lùi một nước.");
+      this.ui.render();
+    } else if (offer.kind === "rematch" && this.match.result) {
+      this.startOnline(null, true);
+      this.ui.toast("Tái đấu · Hai người đã đổi màu quân.");
+    }
+  }
+
+  sendChat(text) {
+    const now = performance.now(), message = text.trim().slice(0, 240);
+    if (!message || !this.net.connected || now - this.lastSentChat < 230) return false;
+    if (!this.net.send({type: "CHAT", text: message})) return false;
+    this.lastSentChat = now;
+    this.ui.chat(this.profile(this.myColor).name, message);
+    return true;
+  }
+
+  receive(packet) {
+    if (this.mode !== "online") return;
+    const host = this.net.role === "host";
+    if (!this.net.connected) {
+      if (this.net.phase !== "handshake") return;
+      if (host && packet.type === "HELLO" && packet.version === 1 && !this.onlineStarted) this.startOnline(packet.name);
+      else if (!host && packet.type === "STATE") this.acceptState(packet);
+      return;
+    }
+    if (packet.type === "LEAVE") { this.net.fail("Đối thủ đã thoát phòng.", "left"); return; }
+    if (packet.type === "CHAT") {
+      const now = performance.now();
+      const message = typeof packet.text === "string" ? packet.text.slice(0, 240).trim() : "";
+      if (message && now - this.lastIncomingChat >= 200) {
+        this.lastIncomingChat = now;
+        this.ui.chat(this.profile(-this.myColor).name, message);
+        this.sound.play("message");
+      }
+      return;
+    }
+    if (host) this.receiveAsHost(packet);
+    else this.receiveAsGuest(packet);
+  }
+
+  receiveAsHost(packet) {
+    if (packet.type === "SYNC_REQUEST") { this.sendState(); return; }
+    if (this.checkTimeout()) return;
+    if (packet.game !== this.gameId) {
+      if (packet.type === "MOVE") this.sendState();
+      return;
+    }
+    const guest = -this.myColor, sameRevision = packet.revision === this.revision;
+    if (packet.type === "MOVE") {
+      const move = sameRevision && this.match.engine.turn === guest && !this.match.result && safeMove(packet)
+        ? this.match.engine.resolve(packet, this.match.legal) : null;
+      if (!move || this.match.project(move) !== packet.fen) this.sendState();
+      else this.commitOnline(move);
+    } else if (packet.type === "REQUEST" && sameRevision) {
+      this.createOffer(packet.kind, guest);
+    } else if (packet.type === "REPLY") {
+      this.resolveOffer(packet.id, packet.accepted, guest);
+    } else if (packet.type === "RESIGN" && this.match.resign(guest)) {
+      this.afterFinish();
+    } else if (packet.type === "CLAIM" && sameRevision && this.match.engine.turn === guest &&
+        (packet.move === null || safeMove(packet.move)) && this.match.claim(packet.move)) {
+      this.afterFinish();
+    }
+  }
+
+  receiveAsGuest(packet) {
+    if (packet.type === "STATE") { this.acceptState(packet); return; }
+    if (packet.type === "MOVE") { this.acceptMove(packet); return; }
+    if (packet.game !== this.gameId) return;
+    if (packet.type === "CLOCK" && packet.revision === this.revision && this.match.running && validClocks(packet, this.match.minutes)) {
+      this.match.readClocks(packet);
+    } else if (packet.type === "OFFER" && packet.revision === this.revision) {
+      const offer = this.validateOffer(packet.offer);
+      if (!offer) return;
+      this.setOffer(offer);
+      if (offer.by === this.myColor) this.ui.toast("Đã gửi lời đề nghị.");
+      this.ui.render();
+    } else if (packet.type === "OFFER_END" && this.offer?.id === packet.id) {
+      if (this.offer.by === this.myColor) this.ui.toast("Đối thủ đã từ chối.");
+      this.setOffer(null);
+      this.ui.render();
+    }
+  }
+}
+
+new ChessApp();
+</script>
+</body>
+</html>
