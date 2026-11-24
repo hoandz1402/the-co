@@ -118,7 +118,6 @@
   .account-tools .surface { min-height: 36px; padding: 5px 9px; }
   .account-summary, .room-notice { color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
   .room-notice { display: grid; gap: 4px; padding: 9px 10px; border-radius: 8px; background: #21362c; color: #cfefdb; }
-  .room-notice.assisted { background: #3a3224; color: #ffe2ad; }
   .rating-cue { font-weight: 750; }
   .identity-list { display: grid; gap: 5px; max-height: min(54vh, 500px); overflow: auto; scrollbar-color: #466454 var(--panel); }
   .identity-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; background: #23352d; border-radius: 7px; font-size: .89rem; }
@@ -223,7 +222,6 @@
           <div id="roomSetup" class="card-inner" style="padding:0">
             <label id="onlineKindField" hidden>Loại phòng<select id="onlineKind">
               <option value="peer">Bạn bè qua mã phòng</option><option value="rated">Ván tính Elo</option>
-              <option value="assisted" hidden>Ván có AI hỗ trợ</option>
             </select></label>
             <label id="nicknameField">Tên hiển thị<input id="nickname" autocomplete="nickname" maxlength="24" placeholder="Tên của bạn"></label>
             <div class="field-grid">
@@ -253,6 +251,7 @@
             <button class="surface" type="button" id="undo" data-icon="undo">Đi lại</button>
             <button class="surface" type="button" id="flip" data-icon="flip">Xoay bàn cờ</button>
             <button class="surface" type="button" id="hint" data-icon="hint">Gợi ý</button>
+            <button class="surface" type="button" id="adminBot" data-icon="bot" hidden>Cho bot đi</button>
             <button class="surface" type="button" id="copyFen" data-icon="copy">Copy FEN</button>
             <button class="surface" type="button" id="loadFen" data-icon="upload">Nạp FEN</button>
             <button class="surface" type="button" id="offerDraw" data-icon="handshake">Xin hòa</button>
@@ -683,7 +682,7 @@ function chessCore() {
     PIECES, evaluate, squareName, squareIndex, colorName, sameMove, moveWire, makeResult};
 }
 </script>
-<script>
+<script id="chess-ai">
 "use strict";
 
 // This function and the same core engine are compiled into a Blob worker.
@@ -1305,6 +1304,7 @@ class UIRenderer {
       undo: () => app.undoClick(),
       flip: () => { app.flipped = !app.flipped; this.render(); },
       hint: () => app.hintClick(),
+      adminBot: () => app.hintClick(true),
       copyFen: () => this.copy(app.match.engine.fen(), "Đã copy FEN."),
       loadFen: () => this.showFEN(),
       offerDraw: () => app.offerDrawClick(),
@@ -1492,10 +1492,8 @@ class UIRenderer {
     $("roomInfo").hidden = !net.code || !["waiting", "handshake", "connected"].includes(phase);
     $("roomCode").textContent = net.code;
     const authRoom = net.server && (net.kind || app.serverContext?.kind);
-    const assisted = authRoom === "assisted";
     $("serverNotice").hidden = !authRoom || (!net.role && !app.onlineStarted);
-    $("serverNotice").classList.toggle("assisted", assisted);
-    $("roomNoticeText").textContent = assisted ? "Admin có thể xem gợi ý AI · Ván này không tính Elo" : "Ván tính Elo";
+    $("roomNoticeText").textContent = authRoom === "rated" ? "Ván tính Elo" : "Ván giao hữu";
     const myAwards = app.serverContext?.awards;
     const myDelta = myAwards && (app.myColor === core.WHITE ? myAwards.white : myAwards.black);
     $("ratingChange").hidden = myDelta == null || !match.result;
@@ -1510,6 +1508,9 @@ class UIRenderer {
     $("evalBar").hidden = online;
     $("hint").hidden = !app.hintsAvailable();
     $("hint").disabled = !app.canPlay() || app.hinting;
+    $("hint").lastChild.textContent = online ? "Gợi ý AI" : "Gợi ý";
+    $("adminBot").hidden = !online || !app.hintsAvailable();
+    $("adminBot").disabled = $("hint").disabled;
     $("loadFen").hidden = online;
     $("flip").hidden = online;
     $("copyFen").disabled = online && !app.onlineStarted;
@@ -1818,7 +1819,6 @@ class RankingUI {
 
   setUser(user) {
     this.user = user;
-    if (user?.role !== "admin" && $("onlineKind").value === "assisted") $("onlineKind").value = "rated";
     this.app.ui.render();
   }
 
@@ -1832,7 +1832,6 @@ class RankingUI {
     $("accountControls").hidden = !this.available;
     $("onlineKindField").hidden = !this.available;
     $("nicknameField").hidden = this.available && $("onlineKind").value !== "peer";
-    $("onlineKind").querySelector('option[value="assisted"]').hidden = user?.role !== "admin";
     $("accountSummary").textContent = user
       ? user.username + " · Elo " + user.elo + (user.role === "admin" ? " · Admin" : "")
       : "Đăng nhập để chơi tính Elo.";
@@ -2006,10 +2005,7 @@ class ServerOnlineManager {
     } catch (error) {
       if (this.token !== token) return;
       this.close(false);
-      if (error.code === "ASSISTANCE_CONSENT") {
-        this.change("idle");
-        this.handlers.consent(code);
-      } else if (error.status === 401) this.handlers.sessionLost();
+      if (error.status === 401) this.handlers.sessionLost();
       else this.change("error", error.message);
     }
   }
@@ -2109,9 +2105,6 @@ class ChessApp {
       data: (packet) => this.receive(packet),
       status: (phase, detail) => this.connectionChanged(phase, detail),
       sessionLost: () => this.ranking.sessionLost(),
-      consent: (code) => this.ui.confirm("assisted-consent", "Ván có AI hỗ trợ",
-        "Admin có thể xem nước gợi ý của AI. Kết quả ván này không tính Elo.",
-        () => this.openServerRoom(code, true), "Đồng ý vào phòng"),
       failedAction: (packet, message) => {
         if (packet.type === "MOVE") this.pendingMove = false;
         if (packet.type === "SYNC_REQUEST") this.syncing = false;
@@ -2173,8 +2166,8 @@ class ChessApp {
   }
 
   hintsAvailable() {
-    return this.mode !== "online" || (this.net.server && this.ranking?.user?.role === "admin"
-      && this.serverContext?.kind === "assisted" && this.net.connected);
+    return this.mode !== "online" ||
+      (this.ranking?.user?.role === "admin" && this.onlineStarted && this.net.connected);
   }
 
   status() {
@@ -2271,6 +2264,7 @@ class ChessApp {
     if (!move) return;
     if (this.mode !== "online") { this.playOffline(move); return; }
     if (this.net.role === "host") { this.commitOnline(move); return; }
+    this.cancelWork();
     this.pendingMove = true;
     this.pendingAt = performance.now();
     const sent = this.net.send({
@@ -2314,21 +2308,31 @@ class ChessApp {
     else this.ui.render();
   }
 
-  async hintClick() {
+  async hintClick(autoPlay = false) {
     if (!this.hintsAvailable() || !this.canPlay() || this.hinting) return;
+    const online = this.mode === "online";
+    if (autoPlay && !online) return;
+    const {engine} = this.match;
+    const fen = engine.fen();
+    const request = this.net.server ? {room: this.net.code, game: this.gameId, revision: this.revision} : {fen};
     const job = ++this.work;
     this.hinting = true;
     this.ui.render();
     try {
-      const answer = await this.ai.find(this.match.engine, 3, {budget: 1250});
-      if (job !== this.work || !answer?.move) return;
+      const answer = online ? await chessAPI("/admin/assist", request) : await this.ai.find(engine, 3, {budget: 1250});
+      if (job !== this.work || engine !== this.match.engine || engine.fen() !== fen ||
+          !this.canPlay() || !this.hintsAvailable() || !answer?.move) return;
       const move = this.match.engine.resolve(answer.move, this.match.legal);
-      if (move) {
+      if (!move) return;
+      if (autoPlay) this.submitMove(move);
+      else {
         this.suggested = move;
         this.ui.toast("Gợi ý " + this.match.engine.sanBase(move, this.match.legal));
       }
-    } catch {
-      if (job === this.work) this.ui.toast("Không khởi động được công cụ gợi ý.");
+    } catch (error) {
+      if (job !== this.work) return;
+      if (online && error.status === 401) this.ranking.sessionLost();
+      else this.ui.toast(online ? error.message : "Không khởi động được công cụ gợi ý.");
     } finally {
       if (job === this.work) { this.hinting = false; this.ui.render(); }
     }
@@ -2436,7 +2440,7 @@ class ChessApp {
     this.net.open(role, code);
   }
 
-  openServerRoom(code, acceptAssistance = false) {
+  openServerRoom(code) {
     if (this.mode !== "online" || this.net.role) return;
     if (!this.ranking.available) {
       this.ranking.refresh();
@@ -2444,7 +2448,7 @@ class ChessApp {
       return;
     }
     if (!this.ranking.user) {
-      this.ranking.openAuth(false, () => this.openServerRoom(code, acceptAssistance));
+      this.ranking.openAuth(false, () => this.openServerRoom(code));
       return;
     }
     this.resetRoom();
@@ -2453,7 +2457,7 @@ class ChessApp {
     $("chatLog").replaceChildren();
     this.replaceMatch(new ChessMatch(0, core.START, false));
     const choice = $("hostColor").value;
-    const options = code ? {acceptAssistance} : {
+    const options = code ? {} : {
       kind: $("onlineKind").value, minutes: Number($("onlineTime").value),
       color: choice === "w" ? 1 : choice === "b" ? -1 : 0
     };
@@ -2477,6 +2481,7 @@ class ChessApp {
       this.replaceMatch(new ChessMatch(0, core.START, false));
       $("chatLog").replaceChildren();
     } else if (phase === "left" || phase === "error") {
+      this.cancelWork();
       this.match.readClocks(this.match.clockPacket(), false);
       this.pendingMove = this.syncing = false;
       this.setOffer(null);
@@ -2543,8 +2548,8 @@ class ChessApp {
     this.flipped = this.myColor === core.BLACK;
     this.match = match;
     this.pendingMove = this.syncing = false;
+    this.cancelWork();
     if (this.net.server) {
-      this.cancelWork();
       this.serverContext = {
         kind: packet.kind, awards: packet.awards, hostElo: packet.hostElo, guestElo: packet.guestElo,
         canRematch: packet.canRematch
@@ -2579,6 +2584,7 @@ class ChessApp {
     const side = this.match.engine.turn;
     const record = this.match.play(move);
     if (!record) return;
+    this.cancelWork();
     if (this.match.result || (this.offer && (this.offer.kind !== "draw" || this.offer.by !== side))) this.setOffer(null);
     this.revision++;
     this.broadcastAt = performance.now();
@@ -2599,6 +2605,7 @@ class ChessApp {
     if (!move || this.match.project(move) !== packet.fen) { this.requestSync(); return; }
     const record = this.match.play(move);
     if (!record) { this.requestSync(); return; }
+    this.cancelWork();
     this.match.readClocks(packet, !this.match.result);
     this.revision = packet.revision;
     this.pendingMove = this.syncing = false;

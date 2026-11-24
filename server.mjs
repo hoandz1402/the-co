@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
+import { Worker } from "node:worker_threads";
 
 const HTML = readFileSync(new URL("./index.html", import.meta.url), "utf8");
 const script = (id) => {
@@ -19,6 +20,12 @@ const {core, ChessMatch, TIMER_OPTIONS} = runInNewContext(
   script("chess-core") + "\nconst core = chessCore();\n" + script("chess-match") +
   "\n({core, ChessMatch, TIMER_OPTIONS});"
 );
+const ADMIN_ENGINE_SOURCE = [
+  'const { parentPort, workerData } = require("node:worker_threads");',
+  'globalThis.self = {postMessage: (reply) => parentPort.postMessage(reply)};',
+  script("chess-core"), script("chess-ai"),
+  'installAIWorker(); self.onmessage({data: workerData});'
+].join("\n");
 
 const COOKIE = "the_co_session";
 const SESSION_AGE = 14 * 24 * 60 * 60;
@@ -92,6 +99,31 @@ function propagate(response, packet) {
   if (response.destroyed || response.writableEnded) return;
   if (response.writableLength > 256 * 1024) { response.end(); return; }
   response.write("data: " + JSON.stringify(packet) + "\n\n");
+}
+
+function searchAdminMove(engine, budget) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(ADMIN_ENGINE_SOURCE, {
+      eval: true, env: {},
+      workerData: {fen: engine.fen(), level: 4, budget, repetitions: [...engine.repetitions]}
+    });
+    let finished = false;
+    const finish = (error, move) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve(move);
+      void worker.terminate();
+    };
+    const timer = setTimeout(() => finish(new Error("AI search timed out")), 3500);
+    worker.once("message", ({answer, error}) => {
+      if (error) finish(new Error(error));
+      else finish(null, answer?.move);
+    });
+    worker.once("error", (error) => finish(error));
+    worker.once("exit", () => finish(new Error("AI worker exited before returning a move")));
+  });
 }
 
 async function openDatabase(databasePath, databaseURL) {
@@ -199,6 +231,7 @@ export async function createChessServer({
   const roomForUser = query("SELECT document FROM rooms WHERE host = ? OR guest = ?");
   const updateRating = query("UPDATE users SET elo = ?, games = games + 1 WHERE id = ?");
   const activeStreams = new Map(), rateLimits = new Map(), deadlines = new Map();
+  const activeAdminSearches = new Set();
   const dummyHash = await hashPassword(randomBytes(24).toString("hex"));
 
   if (adminUsername || adminPassword) {
@@ -320,16 +353,13 @@ export async function createChessServer({
     return room;
   }
 
-  async function joinRoom(room, user, data) {
+  async function joinRoom(room, user) {
     if (room.closed) throw roomMissing();
     if (member(room, user)) {
       if (room.left === user.id) throw new HttpError(409, "Bạn đã rời phòng này.");
       return settleTimeout(room);
     }
     if (room.guest) throw new HttpError(409, "Phòng đã có hai người chơi.");
-    if (room.kind === "assisted" && data.acceptAssistance !== true) {
-      throw new HttpError(409, "Admin có thể xem gợi ý AI trong ván này.", "ASSISTANCE_CONSENT");
-    }
     room.guest = user.id;
     newRound(room);
     await saveRoom(room);
@@ -529,6 +559,48 @@ export async function createChessServer({
     return user;
   }
 
+  async function requestAdminMove(session, data) {
+    const admin = await requireSession(session);
+    if (admin.role !== "admin") throw denied();
+    throttle("admin-ai:" + admin.id, 8, 10000);
+    if (activeAdminSearches.has(admin.id) || activeAdminSearches.size >= 2) {
+      throw new HttpError(429, "Bot AI đang xử lý nước đi. Hãy thử lại.");
+    }
+    activeAdminSearches.add(admin.id);
+    try {
+      const activeRoom = async () => {
+        const room = await getRoom(data.room);
+        if (!member(room, admin) || room.left === admin.id || room.closed) throw roomMissing();
+        if (!room.running || room.game !== data.game || room.revision !== data.revision ||
+            room.turn !== sideFor(room, admin.id)) {
+          throw new HttpError(409, "Bàn cờ đã thay đổi hoặc chưa đến lượt bạn.");
+        }
+        if (room.minutes && currentClocks(room).includes(0)) throw new HttpError(409, "Bạn đã hết giờ.");
+        return room;
+      };
+      let engine, budget = 2200;
+      if (data.room !== undefined) {
+        if (typeof data.room !== "string" || !ROOM.test(data.room)) throw roomMissing();
+        const room = await activeRoom();
+        const match = rebuild(room);
+        engine = match.engine;
+        if (room.minutes) budget = Math.max(25, Math.min(budget, match.times()[match.index(room.turn)] - 100));
+      } else {
+        if (typeof data.fen !== "string" || data.fen.length > 160) throw bad("Vị trí bàn cờ không hợp lệ.");
+        try { engine = new core.ChessEngine(data.fen); }
+        catch { throw bad("Vị trí bàn cờ không hợp lệ."); }
+        if (engine.outcome()) throw new HttpError(409, "Ván đấu đã kết thúc.");
+      }
+      let move;
+      try { move = await searchAdminMove(engine, budget); }
+      catch { throw new HttpError(503, "Bot AI chưa trả được nước đi. Hãy thử lại."); }
+      await requireSession(session);
+      if (data.room !== undefined) await activeRoom();
+      if (!engine.resolve(move)) throw new HttpError(409, "Vị trí này không có nước đi hợp lệ.");
+      return {move};
+    } finally { activeAdminSearches.delete(admin.id); }
+  }
+
   function setCookie(response, token, maxAge) {
     response.setHeader("Set-Cookie", COOKIE + "=" + token + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" + maxAge + (secureCookies ? "; Secure" : ""));
   }
@@ -606,7 +678,9 @@ export async function createChessServer({
       const isAdmin = path.startsWith("/api/admin/");
       if (!roomRoute && !isAdmin && path !== "/api/rooms") throw new HttpError(404, "Đường dẫn không tồn tại.");
       if (!user) throw new HttpError(401, "Hãy đăng nhập để tiếp tục.");
-      if (path === "/api/admin/users" && method === "GET" && user.role === "admin") {
+      if (path === "/api/admin/assist" && method === "POST" && user.role === "admin") {
+        sendJSON(response, 200, await requestAdminMove(session, await readJSON(request)));
+      } else if (path === "/api/admin/users" && method === "GET" && user.role === "admin") {
         const search = (url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 24);
         const pattern = "%" + search.replace(/[!%_]/g, "!$&") + "%";
         const players = await query("SELECT id, username, elo, games, role, suspended FROM users WHERE name_key LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT 100").all(pattern);
@@ -639,7 +713,7 @@ export async function createChessServer({
           const {room, changed, chat, players} = await transaction(async () => {
             const player = await requireSession(session);
             const room = await getRoom(code);
-            if (action === "join") return {room, changed: await joinRoom(room, player, data), players: await roomPlayers(room)};
+            if (action === "join") return {room, changed: await joinRoom(room, player), players: await roomPlayers(room)};
             if (member(room, player)) { actionRoom = room; actionUser = player; }
             const outcome = await applyAction(room, player, data);
             return {room, ...outcome, players: await roomPlayers(room)};
