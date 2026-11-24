@@ -114,6 +114,18 @@
   .empty .icon { color: #85a797; width: 24px; height: 24px; }
   .room-code { display: grid; gap: 8px; }
   .code { color: var(--mint); letter-spacing: .1em; font: 700 1.23rem ui-monospace, Consolas, monospace; }
+  .account-tools { display: flex; flex-wrap: wrap; gap: 7px; }
+  .account-tools .surface { min-height: 36px; padding: 5px 9px; }
+  .account-summary, .room-notice { color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
+  .room-notice { display: grid; gap: 4px; padding: 9px 10px; border-radius: 8px; background: #21362c; color: #cfefdb; }
+  .room-notice.assisted { background: #3a3224; color: #ffe2ad; }
+  .rating-cue { font-weight: 750; }
+  .identity-list { display: grid; gap: 5px; max-height: min(54vh, 500px); overflow: auto; scrollbar-color: #466454 var(--panel); }
+  .identity-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; background: #23352d; border-radius: 7px; font-size: .89rem; }
+  .identity-row strong { overflow-wrap: anywhere; }
+  .identity-meta { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  .identity-row .surface { min-height: 32px; padding: 5px 9px; }
+  .credential-form { display: grid; gap: 10px; }
   .join-row, .chat-form { display: flex; gap: 7px; }
   .join-row .btn, .chat-form .btn { flex: 0 0 auto; }
   .chat-form, .reactions { padding: 8px 12px; }
@@ -127,7 +139,7 @@
   dialog h2 { font-size: 1.22rem; letter-spacing: -.02em; margin-bottom: 10px; }
   dialog p { color: var(--muted); margin-bottom: 13px; }
   .dialog-body { display: grid; gap: 10px; }
-  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
+  .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 15px; }
   .promotions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
   .promotions button { display: grid; place-items: center; aspect-ratio: 1; padding: 5px; background: #779a8d; border: 2px solid transparent; }
   .promotions button:hover { border-color: var(--mint); }
@@ -198,8 +210,22 @@
       <section class="card" id="roomCard" hidden>
         <div class="card-inner">
           <h2 class="card-title" data-icon="globe">Phòng chơi</h2>
+          <div id="accountControls" class="room-code" hidden>
+            <p class="account-summary" id="accountSummary"></p>
+            <div class="account-tools">
+              <button class="surface" id="loginButton" type="button">Đăng nhập</button>
+              <button class="surface" id="registerButton" type="button">Đăng ký</button>
+              <button class="surface" id="leaderboardButton" type="button">Bảng Elo</button>
+              <button class="surface" id="adminButton" type="button" hidden>Quản trị</button>
+              <button class="surface" id="logoutButton" type="button" hidden>Đăng xuất</button>
+            </div>
+          </div>
           <div id="roomSetup" class="card-inner" style="padding:0">
-            <label>Tên hiển thị<input id="nickname" autocomplete="nickname" maxlength="24" placeholder="Tên của bạn"></label>
+            <label id="onlineKindField" hidden>Loại phòng<select id="onlineKind">
+              <option value="peer">Bạn bè qua mã phòng</option><option value="rated">Ván tính Elo</option>
+              <option value="assisted" hidden>Ván có AI hỗ trợ</option>
+            </select></label>
+            <label id="nicknameField">Tên hiển thị<input id="nickname" autocomplete="nickname" maxlength="24" placeholder="Tên của bạn"></label>
             <div class="field-grid">
               <label>Màu quân<select id="hostColor"><option value="random">Ngẫu nhiên</option><option value="w">Trắng</option><option value="b">Đen</option></select></label>
               <label>Đồng hồ<select id="onlineTime"><option value="0">Không giới hạn</option><option value="3">3 phút</option><option value="5" selected>5 phút</option><option value="10">10 phút</option></select></label>
@@ -210,6 +236,7 @@
           <div id="roomInfo" class="room-code" hidden><strong class="code" id="roomCode"></strong>
             <div class="button-grid"><button class="btn" id="copyCode" type="button" data-icon="copy">Copy mã phòng</button><button class="btn" id="copyInvite" type="button" data-icon="link">Copy link mời</button></div>
           </div>
+          <div class="room-notice" id="serverNotice" hidden><span id="roomNoticeText"></span><span class="rating-cue" id="ratingChange" hidden></span></div>
           <button class="btn danger" id="leaveRoom" type="button" hidden>Rời phòng</button>
         </div>
       </section>
@@ -257,7 +284,7 @@
 </dialog>
 <div id="toast" class="toast" role="status" hidden></div>
 <div id="ghost" class="ghost" aria-hidden="true" hidden></div>
-<script>
+<script id="chess-core">
 "use strict";
 
 // Constants, piece-square tables, and the interface-independent chess engine.
@@ -942,7 +969,7 @@ class SoundManager {
   }
 }
 </script>
-<script>
+<script id="chess-match">
 "use strict";
 
 const RESULT_TEXT = {
@@ -951,7 +978,7 @@ const RESULT_TEXT = {
   seventyFive: "Hòa theo luật 75 nước", fivefold: "Hòa do lặp thế cờ năm lần",
   timeout: "Hết giờ", timeoutDraw: "Hòa do hết giờ và đối thủ không thể chiếu bí",
   resign: "Đầu hàng", resignDraw: "Hòa do đầu hàng và đối thủ không thể chiếu bí",
-  agreement: "Hòa thỏa thuận"
+  agreement: "Hòa thỏa thuận", cancelled: "Ván đấu đã bị hủy"
 };
 const TIMER_OPTIONS = new Set([0, 3, 5, 10]);
 const ROOM_CODE = /^CHESS-[0-9]{4}$/;
@@ -1057,7 +1084,10 @@ class ChessMatch {
     return result ? this.finish(result) : false;
   }
 }
+</script>
 
+<script>
+"use strict";
 class MultiplayerManager {
   constructor(handlers) {
     this.handlers = handlers;
@@ -1282,7 +1312,7 @@ class UIRenderer {
       resign: () => app.resignClick(),
       createRoom: () => app.openRoom("host"),
       joinRoom: () => app.openRoom("guest"),
-      leaveRoom: () => app.net.close(),
+      leaveRoom: () => app.leaveRoom(),
       copyCode: () => this.copy(app.net.code, "Đã copy mã phòng."),
       copyInvite: () => this.copyInvite(),
       movesTab: () => this.setTab("moves"),
@@ -1456,19 +1486,29 @@ class UIRenderer {
     badge.classList.toggle("off", online && ["idle", "left", "error"].includes(phase));
     $("connectionText").textContent = online ? connectionLabels[phase] : "Chơi ngoại tuyến";
     $("roomCard").hidden = !online;
+    app.ranking?.render();
     $("roomSetup").hidden = !!net.role;
     $("leaveRoom").hidden = !net.role;
     $("roomInfo").hidden = !net.code || !["waiting", "handshake", "connected"].includes(phase);
     $("roomCode").textContent = net.code;
+    const authRoom = net.server && (net.kind || app.serverContext?.kind);
+    const assisted = authRoom === "assisted";
+    $("serverNotice").hidden = !authRoom || (!net.role && !app.onlineStarted);
+    $("serverNotice").classList.toggle("assisted", assisted);
+    $("roomNoticeText").textContent = assisted ? "Admin có thể xem gợi ý AI · Ván này không tính Elo" : "Ván tính Elo";
+    const myAwards = app.serverContext?.awards;
+    const myDelta = myAwards && (app.myColor === core.WHITE ? myAwards.white : myAwards.black);
+    $("ratingChange").hidden = myDelta == null || !match.result;
+    $("ratingChange").textContent = myDelta == null ? "" : "Elo " + (myDelta >= 0 ? "+" : "") + myDelta;
     $("offlineSetup").hidden = online;
     $("difficultyField").hidden = !bot;
     $("newGame").hidden = online && !net.connected;
-    $("newGame").disabled = online && (!match.result || !!offer);
+    $("newGame").disabled = online && (!match.result || !!offer || app.serverContext?.canRematch === false);
     $("newGame").lastChild.textContent = online ? "Tái đấu" : "Ván mới";
-    $("undo").disabled = !engine.history.length || (online && (!net.connected || !!offer));
+    $("undo").disabled = !engine.history.length || (online && (!net.connected || !!offer || authRoom === "rated"));
     $("undo").lastChild.textContent = online ? "Xin đi lại" : "Đi lại";
     $("evalBar").hidden = online;
-    $("hint").hidden = online;
+    $("hint").hidden = !app.hintsAvailable();
     $("hint").disabled = !app.canPlay() || app.hinting;
     $("loadFen").hidden = online;
     $("flip").hidden = online;
@@ -1505,7 +1545,7 @@ class UIRenderer {
       const {parts} = player, profile = app.profile(side), taken = captures[side];
       parts.avatar.innerHTML = icon(profile.icon);
       parts["player-name"].textContent = profile.name;
-      parts["player-color"].textContent = sideText(side);
+      parts["player-color"].textContent = sideText(side) + (profile.elo == null ? "" : " · Elo " + profile.elo);
       parts.takes.innerHTML = taken.sort((a, b) => Math.abs(a) - Math.abs(b)).map(pieceSVG).join("");
       parts.takes.setAttribute("aria-label", taken.length ? "Đã ăn " + taken.map((piece) => PIECE_NAMES[Math.abs(piece)]).join(", ") : "");
       const advantage = totals[side] - totals[-side];
@@ -1735,6 +1775,311 @@ class UIRenderer {
 <script>
 "use strict";
 
+const RANKED_CODE = /^ELO-[A-HJ-NP-Z2-9]{5}$/;
+
+async function chessAPI(path, body) {
+  const options = {cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(12000)};
+  if (body !== undefined) Object.assign(options, {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+  });
+  const response = await fetch("/api" + path, options);
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw Object.assign(new Error(json.message || "Không kết nối được máy chủ Thế Cờ."), {
+      status: response.status, code: json.code, state: json.state
+    });
+  }
+  return json;
+}
+
+class RankingUI {
+  constructor(app) {
+    this.app = app;
+    this.available = false;
+    this.user = null;
+    $("loginButton").addEventListener("click", () => this.openAuth());
+    $("registerButton").addEventListener("click", () => this.openAuth(true));
+    $("logoutButton").addEventListener("click", () => this.logout());
+    $("leaderboardButton").addEventListener("click", () => this.openList(false));
+    $("adminButton").addEventListener("click", () => this.openList(true));
+    $("onlineKind").addEventListener("change", () => this.app.ui.render());
+  }
+
+  async refresh() {
+    if (!["http:", "https:"].includes(location.protocol)) return;
+    try {
+      const {available, user} = await chessAPI("/account");
+      if (available) {
+        this.available = true;
+        this.setUser(user);
+      }
+    } catch {}
+  }
+
+  setUser(user) {
+    this.user = user;
+    if (user?.role !== "admin" && $("onlineKind").value === "assisted") $("onlineKind").value = "rated";
+    this.app.ui.render();
+  }
+
+  sessionLost() {
+    if (this.app.net.server) this.app.net.fail("Phiên đăng nhập đã kết thúc. Hãy đăng nhập lại.");
+    this.setUser(null);
+  }
+
+  render() {
+    const user = this.user;
+    $("accountControls").hidden = !this.available;
+    $("onlineKindField").hidden = !this.available;
+    $("nicknameField").hidden = this.available && $("onlineKind").value !== "peer";
+    $("onlineKind").querySelector('option[value="assisted"]').hidden = user?.role !== "admin";
+    $("accountSummary").textContent = user
+      ? user.username + " · Elo " + user.elo + (user.role === "admin" ? " · Admin" : "")
+      : "Đăng nhập để chơi tính Elo.";
+    $("loginButton").hidden = $("registerButton").hidden = !!user;
+    $("logoutButton").hidden = !user;
+    $("adminButton").hidden = user?.role !== "admin";
+    if (this.available && !$("roomInput").value) {
+      $("roomInput").placeholder = $("onlineKind").value === "peer" ? "CHESS-4829" : "ELO-6WM6G";
+    }
+  }
+
+  openAuth(register = false, after = null) {
+    const form = document.createElement("form"), feedback = document.createElement("div");
+    form.id = "accountForm";
+    form.className = "credential-form";
+    feedback.className = "form-error";
+    feedback.setAttribute("role", "alert");
+    const field = (title, type, autocomplete, max, min) => {
+      const label = document.createElement("label"), input = document.createElement("input");
+      input.type = type;
+      input.autocomplete = autocomplete;
+      input.maxLength = max;
+      input.minLength = min;
+      input.required = true;
+      label.append(title, input);
+      form.append(label);
+      return input;
+    };
+    const name = field("Tên tài khoản", "text", "username", 24, 3);
+    name.pattern = "[A-Za-z0-9_]{3,24}";
+    name.autocapitalize = "none";
+    const password = field("Mật khẩu", "password", register ? "new-password" : "current-password", 128, 10);
+    form.append(feedback);
+    const title = register ? "Đăng ký" : "Đăng nhập";
+    const submit = button(title, () => {}, true);
+    submit.type = "submit";
+    submit.setAttribute("form", form.id);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      submit.disabled = true;
+      feedback.textContent = "";
+      try {
+        const {user} = await chessAPI(register ? "/register" : "/login", {username: name.value, password: password.value});
+        this.setUser(user);
+        this.app.ui.dismiss("account");
+        this.app.ui.toast("Đã đăng nhập với tài khoản " + user.username + ".");
+        after?.();
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally { submit.disabled = false; }
+    });
+    this.app.ui.show("account", title, [form], [
+      button(register ? "Đăng nhập" : "Tạo tài khoản", () => {
+        this.app.ui.dismiss("account");
+        this.openAuth(!register, after);
+      }),
+      button("Hủy", () => this.app.ui.dismiss("account")), submit
+    ]);
+  }
+
+  async logout() {
+    try {
+      await chessAPI("/logout", {});
+      if (this.app.net.server && this.app.net.role) this.app.net.close(false);
+      this.setUser(null);
+      if (this.app.net.server) this.app.connectionChanged("idle");
+    } catch (error) {
+      this.app.ui.toast(error.message);
+    }
+  }
+
+  openList(admin) {
+    const list = document.createElement("div"), search = document.createElement("input");
+    list.className = "identity-list";
+    search.type = "search";
+    search.placeholder = "Tìm theo tên tài khoản";
+    search.setAttribute("aria-label", search.placeholder);
+    let request = 0;
+    async function load() {
+      const latest = ++request;
+      try {
+        const path = admin ? "/admin/users?q=" + encodeURIComponent(search.value) : "/leaderboard";
+        const {players} = await chessAPI(path);
+        if (latest !== request) return;
+        list.replaceChildren();
+        if (!players.length) list.textContent = admin ? "Không tìm thấy tài khoản." : "Chưa có ván tính Elo nào.";
+        players.forEach((player, index) => {
+          const row = document.createElement("div"), detail = document.createElement("div");
+          row.className = "identity-row";
+          const label = document.createElement("strong"), meta = document.createElement("p");
+          label.textContent = (admin ? "" : (index + 1) + ". ") + player.username;
+          meta.className = "identity-meta";
+          meta.style.marginBottom = "0";
+          meta.textContent = player.games + " ván · Elo " + player.elo
+            + (admin && player.role === "admin" ? " · Admin" : "")
+            + (admin && player.suspended ? " · Đã khóa" : "");
+          detail.append(label, meta);
+          row.append(detail);
+          if (!admin) {
+            const rating = document.createElement("strong");
+            rating.textContent = player.elo;
+            meta.textContent = player.games + " ván";
+            row.append(rating);
+          } else if (player.role !== "admin") {
+            const action = button(player.suspended ? "Mở khóa" : "Khóa", async () => {
+              action.disabled = true;
+              try {
+                await chessAPI("/admin/suspension", {id: player.id, suspended: !player.suspended});
+                load();
+              } catch (error) {
+                action.disabled = false;
+                meta.textContent = error.message;
+              }
+            });
+            action.className = "surface";
+            row.append(action);
+          }
+          list.append(row);
+        });
+      } catch (error) {
+        if (latest === request) list.textContent = error.message;
+      }
+    }
+    search.addEventListener("input", load);
+    list.textContent = "Đang tải…";
+    if (this.app.ui.show("ranking", admin ? "Quản trị tài khoản" : "Bảng Elo", admin ? [search, list] : [list],
+      [button("Đóng", () => this.app.ui.dismiss("ranking"), true)])) load();
+  }
+}
+
+class ServerOnlineManager {
+  constructor(handlers) {
+    this.server = true;
+    this.handlers = handlers;
+    this.token = 0;
+    this.close(false);
+  }
+
+  get connected() { return this.phase === "connected"; }
+
+  change(phase, detail) {
+    this.phase = phase;
+    this.handlers.status(phase, detail);
+  }
+
+  ready() { if (!this.connected) this.change("connected"); }
+
+  async open(code, data) {
+    this.close(false);
+    this.role = "guest";
+    this.code = code;
+    const token = this.token;
+    this.change("connecting");
+    try {
+      const room = await chessAPI(code ? "/rooms/" + code + "/join" : "/rooms", data);
+      if (token !== this.token) return;
+      this.code = room.code;
+      this.apply(room.state);
+      if (token !== this.token) return;
+      const stream = this.stream = new EventSource("/api/rooms/" + this.code + "/events");
+      stream.onmessage = (event) => {
+        if (token !== this.token) return;
+        try { this.apply(JSON.parse(event.data)); } catch {}
+      };
+      stream.onerror = () => {
+        if (token !== this.token) return;
+        if (stream.readyState === EventSource.CLOSED) this.fail("Không mở được kết nối tới phòng.");
+        else if (this.phase !== "connecting") this.change("connecting");
+      };
+    } catch (error) {
+      if (this.token !== token) return;
+      this.close(false);
+      if (error.code === "ASSISTANCE_CONSENT") {
+        this.change("idle");
+        this.handlers.consent(code);
+      } else if (error.status === 401) this.handlers.sessionLost();
+      else this.change("error", error.message);
+    }
+  }
+
+  apply(packet, force = false) {
+    if (packet.type === "SESSION_END") { this.handlers.sessionLost(); return; }
+    if (packet.type === "ROOM_CLOSED") { this.fail("Phòng đã đóng."); return; }
+    if (packet.type === "CHAT") { this.handlers.data(packet); return; }
+    if (!["STATE", "ROOM_WAITING"].includes(packet.type) || packet.revision < this.lastRevision) return;
+    const recovering = this.phase === "connecting";
+    if (packet.revision === this.lastRevision && !force && !recovering) return;
+    this.lastRevision = packet.revision;
+    if (packet.type === "ROOM_WAITING") {
+      this.kind = packet.kind;
+      if (this.phase !== "waiting") this.change("waiting");
+    } else {
+      if (!this.connected) this.change("handshake");
+      this.handlers.data(packet);
+    }
+  }
+
+  send(packet) {
+    if (!this.role || !this.code) return false;
+    const token = this.token, code = this.code;
+    chessAPI("/rooms/" + code + "/action", packet).then(({state}) => {
+      if (token === this.token) this.apply(state, packet.type === "SYNC_REQUEST");
+    }).catch((error) => {
+      if (token !== this.token) return;
+      if (error.status === 401) { this.handlers.sessionLost(); return; }
+      if (error.state) this.apply(error.state, true);
+      this.handlers.failedAction(packet, error.message);
+    });
+    return true;
+  }
+
+  async leave() {
+    if (!this.role || !this.code) { this.close(); return; }
+    const token = this.token;
+    try {
+      await chessAPI("/rooms/" + this.code + "/action", {type: "LEAVE"});
+      if (token === this.token) this.close();
+    } catch (error) {
+      if (token !== this.token) return;
+      if (error.status === 401) this.handlers.sessionLost();
+      else if (error.status === 404) this.close();
+      else this.handlers.failedAction({type: "LEAVE"}, error.message);
+    }
+  }
+
+  fail(message, phase = "error") {
+    this.close(false);
+    this.change(phase, message);
+  }
+
+  close(notify = true) {
+    this.stream?.close();
+    this.stream = null;
+    this.token++;
+    this.phase = "idle";
+    this.code = "";
+    this.kind = null;
+    this.role = null;
+    this.lastRevision = -1;
+    if (notify) this.change("idle");
+  }
+}
+</script>
+<script>
+"use strict";
+
 const OFFER_KINDS = new Set(["draw", "undo", "rematch"]);
 const safeMove = (packet) => packet && typeof packet === "object" &&
   core.squareIndex(packet.from) >= 0 && core.squareIndex(packet.to) >= 0 &&
@@ -1755,23 +2100,43 @@ class ChessApp {
     this.work = 0;
     this.suggested = null;
     this.resetRoom();
-    this.net = new MultiplayerManager({
+    this.peerNet = new MultiplayerManager({
       open: () => { if (this.net.role === "guest") this.net.send({type: "HELLO", version: 1, name: this.nickname}); },
       data: (packet) => this.receive(packet),
       status: (phase, detail) => this.connectionChanged(phase, detail)
     });
+    this.serverNet = new ServerOnlineManager({
+      data: (packet) => this.receive(packet),
+      status: (phase, detail) => this.connectionChanged(phase, detail),
+      sessionLost: () => this.ranking.sessionLost(),
+      consent: (code) => this.ui.confirm("assisted-consent", "Ván có AI hỗ trợ",
+        "Admin có thể xem nước gợi ý của AI. Kết quả ván này không tính Elo.",
+        () => this.openServerRoom(code, true), "Đồng ý vào phòng"),
+      failedAction: (packet, message) => {
+        if (packet.type === "MOVE") this.pendingMove = false;
+        if (packet.type === "SYNC_REQUEST") this.syncing = false;
+        if (packet.type === "REPLY") this.respondedOffer = null;
+        this.ui.toast(message);
+        this.ui.render();
+      }
+    });
+    this.net = this.peerNet;
     this.ui = new UIRenderer(this);
+    this.ranking = new RankingUI(this);
     const invite = new URL(location.href).searchParams.get("room")?.trim().toUpperCase();
-    if (invite && ROOM_CODE.test(invite)) {
+    if (invite && (ROOM_CODE.test(invite) || RANKED_CODE.test(invite))) {
       $("roomInput").value = invite;
+      if (RANKED_CODE.test(invite)) $("onlineKind").value = "rated";
       this.switchMode("online");
     }
     this.ui.render();
+    this.ranking.refresh();
     setInterval(() => this.tick(), 100);
-    window.addEventListener("pagehide", () => this.net.close());
+    window.addEventListener("pagehide", () => this.net.close(!this.net.server));
   }
 
   resetRoom() {
+    this.serverContext = null;
     this.onlineStarted = false;
     this.myColor = core.WHITE;
     this.hostColor = core.WHITE;
@@ -1794,7 +2159,9 @@ class ChessApp {
     if (this.mode === "bot") return side === core.WHITE ? {name: "Bạn", icon: "user"} : {name: "Bot AI", icon: "bot"};
     if (this.mode === "local") return {name: "Người chơi " + sideText(side), icon: "user"};
     if (!this.onlineStarted) return {name: "Quân " + sideText(side), icon: "user"};
-    return {name: side === this.hostColor ? this.hostName : this.guestName, icon: side === this.myColor ? "user" : "users"};
+    const isHost = side === this.hostColor;
+    return {name: isHost ? this.hostName : this.guestName, icon: side === this.myColor ? "user" : "users",
+      elo: isHost ? this.serverContext?.hostElo : this.serverContext?.guestElo};
   }
 
   canPlay() {
@@ -1803,6 +2170,11 @@ class ChessApp {
     if (this.mode === "bot") return turn === core.WHITE && !this.thinking;
     if (this.mode === "online") return this.net.connected && this.onlineStarted && this.myColor === turn && !this.pendingMove && !this.syncing;
     return true;
+  }
+
+  hintsAvailable() {
+    return this.mode !== "online" || (this.net.server && this.ranking?.user?.role === "admin"
+      && this.serverContext?.kind === "assisted" && this.net.connected);
   }
 
   status() {
@@ -1829,7 +2201,7 @@ class ChessApp {
 
   selectMode(mode) {
     if (mode === this.mode || !Object.hasOwn(MODE, mode)) return;
-    if (this.mode === "online" && this.net.connected) {
+    if (this.mode === "online" && this.net.connected && !this.net.server) {
       this.ui.confirm("leave", "Rời phòng chơi?", "Ván online sẽ dừng khi bạn rời phòng.", () => this.switchMode(mode), "Rời phòng");
     } else {
       this.switchMode(mode);
@@ -1838,6 +2210,7 @@ class ChessApp {
 
   switchMode(mode) {
     this.net.close(false);
+    this.net = this.peerNet;
     this.resetRoom();
     this.mode = mode;
     this.flipped = false;
@@ -1942,7 +2315,7 @@ class ChessApp {
   }
 
   async hintClick() {
-    if (this.mode === "online" || !this.canPlay() || this.hinting) return;
+    if (!this.hintsAvailable() || !this.canPlay() || this.hinting) return;
     const job = ++this.work;
     this.hinting = true;
     this.ui.render();
@@ -2040,8 +2413,18 @@ class ChessApp {
   openRoom(role) {
     if (this.mode !== "online" || this.net.role) return;
     let code = $("roomInput").value.trim().toUpperCase();
+    const kind = $("onlineKind").value;
+    if (role === "host" ? kind !== "peer" : RANKED_CODE.test(code)) {
+      this.openServerRoom(role === "guest" ? code : "");
+      return;
+    }
     if (/^\d{4}$/.test(code)) code = "CHESS-" + code;
-    if (role === "guest" && !ROOM_CODE.test(code)) { this.ui.toast("Nhập mã phòng dạng CHESS-4829."); $("roomInput").focus(); return; }
+    if (role === "guest" && !ROOM_CODE.test(code)) {
+      this.ui.toast("Nhập mã phòng dạng CHESS-4829" + (this.ranking.available ? " hoặc ELO-6WM6G." : "."));
+      $("roomInput").focus();
+      return;
+    }
+    this.net = this.peerNet;
     this.resetRoom();
     this.nickname = cleanName($("nickname").value || (role === "host" ? "Chủ phòng" : "Khách"));
     const choice = $("hostColor").value;
@@ -2051,6 +2434,38 @@ class ChessApp {
     $("chatLog").replaceChildren();
     this.replaceMatch(new ChessMatch(0, core.START, false));
     this.net.open(role, code);
+  }
+
+  openServerRoom(code, acceptAssistance = false) {
+    if (this.mode !== "online" || this.net.role) return;
+    if (!this.ranking.available) {
+      this.ranking.refresh();
+      this.ui.toast("Hãy mở ván Elo trên địa chỉ web có máy chủ Thế Cờ.");
+      return;
+    }
+    if (!this.ranking.user) {
+      this.ranking.openAuth(false, () => this.openServerRoom(code, acceptAssistance));
+      return;
+    }
+    this.resetRoom();
+    this.net = this.serverNet;
+    this.flipped = false;
+    $("chatLog").replaceChildren();
+    this.replaceMatch(new ChessMatch(0, core.START, false));
+    const choice = $("hostColor").value;
+    const options = code ? {acceptAssistance} : {
+      kind: $("onlineKind").value, minutes: Number($("onlineTime").value),
+      color: choice === "w" ? 1 : choice === "b" ? -1 : 0
+    };
+    this.net.open(code, options);
+  }
+
+  leaveRoom() {
+    if (!this.net.server) { this.net.close(); return; }
+    if (this.onlineStarted && this.match.running) {
+      this.ui.confirm("room-leave", "Rời phòng đang chơi?", "Rời phòng bây giờ được tính là đầu hàng.",
+        () => this.net.leave(), "Rời phòng");
+    } else this.net.leave();
   }
 
   connectionChanged(phase, detail) {
@@ -2108,6 +2523,7 @@ class ChessApp {
         !Array.isArray(packet.moves) || packet.moves.length > 20000 || packet.initial !== core.START ||
         typeof packet.running !== "boolean" || (packet.result !== null &&
         (!packet.result || !Object.hasOwn(RESULT_TEXT, packet.result.reason) || ![0, 1, -1].includes(packet.result.winner)))) return;
+    if (this.net.server && (!validColor(packet.myColor) || !["rated", "assisted"].includes(packet.kind))) return;
     const match = new ChessMatch(packet.minutes, packet.initial);
     for (const input of packet.moves) {
       if (!safeMove(input) || !match.play(input)) return;
@@ -2123,15 +2539,27 @@ class ChessApp {
     this.hostColor = packet.hostColor;
     this.hostName = cleanName(packet.host);
     this.guestName = cleanName(packet.guest);
-    this.myColor = -packet.hostColor;
+    this.myColor = this.net.server ? packet.myColor : -packet.hostColor;
     this.flipped = this.myColor === core.BLACK;
     this.match = match;
     this.pendingMove = this.syncing = false;
+    if (this.net.server) {
+      this.cancelWork();
+      this.serverContext = {
+        kind: packet.kind, awards: packet.awards, hostElo: packet.hostElo, guestElo: packet.guestElo,
+        canRematch: packet.canRematch
+      };
+      if (this.ranking.user) {
+        this.ranking.user = {...this.ranking.user, elo: packet.elo, games: packet.games};
+      }
+    }
     this.setOffer(this.validateOffer(packet.offer));
     this.ui.clearSelection();
     if (match.result) this.ui.dismiss("resign");
     if (!this.net.connected) this.net.ready();
-    if (oldResult === null && match.result) this.sound.play("end");
+    const stepped = this.net.server && previousGame === this.gameId && oldLength + 1 === packet.moves.length;
+    if (stepped) this.moveSound(match.engine.history.at(-1));
+    else if (oldResult === null && match.result) this.sound.play("end");
     if (previousGame && previousGame !== this.gameId) this.ui.toast("Tái đấu · Hai người đã đổi màu quân.");
     else if (previousGame && oldLength > packet.moves.length) this.ui.toast("Đã lùi một nước.");
     this.ui.render();
@@ -2182,8 +2610,8 @@ class ChessApp {
 
   offerAllowed(kind) {
     if (!this.net.connected || !this.onlineStarted || !OFFER_KINDS.has(kind) || this.syncing || this.offer) return false;
-    if (kind === "rematch") return !!this.match.result;
-    if (kind === "undo") return this.match.engine.history.length > 0;
+    if (kind === "rematch") return !!this.match.result && this.serverContext?.canRematch !== false;
+    if (kind === "undo") return this.serverContext?.kind !== "rated" && this.match.engine.history.length > 0;
     return !this.match.result;
   }
 
